@@ -19,7 +19,7 @@ const state = {
   fileMeta: { payments: { name: '', latest: '', loaded: false } },
   // `coverage` é a faixa de competência realmente carregada de ponta a ponta.
   // Só ela decide o que a tela exibe; linhas fora dela ficam no cache esperando.
-  sync: { lastSync: '', running: false, error: '', message: '', coverage: null, phase: null },
+  sync: { lastSync: '', running: false, error: '', message: '', coverage: null, phase: null, waitUntil: 0, waitStage: '' },
   excludedDates: new Set(),
   month: 'all',
   area: 'operacoes',
@@ -64,7 +64,7 @@ app.innerHTML = `
           </div>
         </div>
         <div class="hero-actions">
-          <div class="hero-badge"><span class="pulse"></span><span id="data-status">Aguardando dados</span></div>
+          <button type="button" class="hero-badge" id="data-status-button" title="Abrir configurações de dados"><span class="pulse"></span><span id="data-status">Aguardando dados</span></button>
         </div>
       </header>
 
@@ -192,6 +192,12 @@ $('#payment-file').addEventListener('change', async (event) => {
 });
 
 $('#settings-toggle').addEventListener('click', () => toggleDrawer(true));
+// A engrenagem lembra a última aba aberta; vindo do badge, o assunto é sempre Dados.
+$('#data-status-button').addEventListener('click', () => {
+  document.querySelectorAll('[data-drawer-tab]').forEach((tab) => tab.classList.toggle('is-active', tab.dataset.drawerTab === 'data'));
+  document.querySelectorAll('[data-drawer-panel]').forEach((panel) => panel.classList.toggle('is-active', panel.dataset.drawerPanel === 'data'));
+  toggleDrawer(true);
+});
 $('#close-settings').addEventListener('click', () => toggleDrawer(false));
 $('#drawer-backdrop').addEventListener('click', () => toggleDrawer(false));
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') toggleDrawer(false); });
@@ -288,6 +294,53 @@ function mergeActivities(kind, incoming) {
 
 const STAGE_LABELS = { customers: 'clientes', meetings: 'reuniões', tasks: 'tarefas' };
 
+/**
+ * A API informa o tempo de bloqueio uma única vez, quando recusa a chamada. Guardar
+ * o instante em que a janela reabre permite contar para baixo na tela — parado em
+ * "43s" por quase um minuto, o dashboard parece travado.
+ */
+let waitTimer = null;
+
+function startWaitTimer(seconds, stage) {
+  state.sync.waitUntil = Date.now() + seconds * 1000;
+  state.sync.waitStage = stage;
+  if (waitTimer) return;
+  waitTimer = setInterval(() => { renderSyncStatus(); renderDataStatus(); }, 1000);
+}
+
+function stopWaitTimer() {
+  if (waitTimer) clearInterval(waitTimer);
+  waitTimer = null;
+  state.sync.waitUntil = 0;
+  state.sync.waitStage = '';
+}
+
+/** Segundos restantes, ou `null` quando não há espera em curso. */
+function waitSeconds() {
+  if (!state.sync.waitUntil) return null;
+  return Math.max(0, Math.ceil((state.sync.waitUntil - Date.now()) / 1000));
+}
+
+/** Zero não vira "0s" parado: a janela pode demorar um instante a mais para reabrir. */
+function waitMessage() {
+  const seconds = waitSeconds();
+  if (seconds === null) return '';
+  const alvo = STAGE_LABELS[state.sync.waitStage] || 'a carga';
+  const note = state.sync.phase?.background ? ' O comparativo com o ano anterior fica disponível ao terminar.' : '';
+  return seconds > 0
+    ? `Limite de requisições da API atingido. Retomando ${alvo} em ${seconds}s.${note}`
+    : `Limite de requisições da API atingido. Retomando ${alvo}…${note}`;
+}
+
+function syncBadgeText() {
+  const seconds = waitSeconds();
+  if (seconds !== null) return seconds > 0 ? `Limite da API · retomando em ${seconds}s` : 'Limite da API · retomando…';
+  const phase = state.sync.phase;
+  // Sem fase é a atualização de quem já tem a janela coberta: não há mês a numerar.
+  if (!phase) return 'Atualizando dados recentes';
+  return `Sincronizando ${phase.label} · mês ${phase.position} de ${phase.total}`;
+}
+
 /** Guarda o que chegou. A tela só passa a exibir quando a cobertura avançar. */
 async function commitRows(patch) {
   if (patch.meetings) state.data.meetings = applyClassifications(mergeActivities('meetings', patch.meetings));
@@ -327,14 +380,17 @@ function syncProgress(progress) {
     const note = phase?.background ? ' O comparativo com o ano anterior fica disponível ao terminar.' : '';
 
     if (waitingSeconds) {
-      state.sync.message = `Limite de requisições da API atingido. Retomando ${STAGE_LABELS[stage]}${scope} em ${waitingSeconds}s.${note}`;
+      startWaitTimer(waitingSeconds, stage);
       renderSyncStatus();
+      renderDataStatus();
       return;
     }
+    stopWaitTimer();
     const percent = total ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
     progress.firstElementChild.style.width = `${percent}%`;
     state.sync.message = `Carregando ${STAGE_LABELS[stage]}${scope}: ${loaded.toLocaleString('pt-BR')}${total ? ` de ${total.toLocaleString('pt-BR')}` : ''}.${note}`;
     renderSyncStatus();
+    renderDataStatus();
   };
 }
 
@@ -369,9 +425,11 @@ async function runSync({ incremental }) {
       // seguinte. As classificações são 10 páginas e não entram em nenhum número da
       // tabela — buscá-las antes atrasaria o primeiro mês em segundos que a pessoa
       // passa olhando para tela vazia, então elas vêm logo depois.
+      const total = syncPhases().length;
       for (let index = 0; index < phases.length; index += 1) {
         const phase = phases[index];
-        state.sync.phase = { label: phase.label, background: index > 0 };
+        // Numeração global: quem volta com parte da janela já coberta retoma do meio.
+        state.sync.phase = { label: phase.label, background: index > 0, position: total - phases.length + index + 1, total };
         renderSyncStatus();
         await syncRange({ ...phase, classifications: state.data.classifications, onProgress, onStageDone: commitRows });
         extendCoverage(phase);
@@ -404,6 +462,7 @@ async function runSync({ incremental }) {
     state.sync.error = error instanceof HubError ? error.message : `Falha na sincronização: ${error.message}`;
     state.sync.message = '';
   } finally {
+    stopWaitTimer();
     state.sync.running = false;
     progress.hidden = true;
     progress.firstElementChild.style.width = '0%';
@@ -443,7 +502,7 @@ async function runConnectionTest() {
 async function clearCache() {
   state.data = { meetings: [], tasks: [], payments: [], classifications: {} };
   state.fileMeta.payments = { name: '', latest: '', loaded: false };
-  state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.', coverage: null, phase: null };
+  state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.', coverage: null, phase: null, waitUntil: 0, waitStage: '' };
   await persistState();
   render();
 }
@@ -679,16 +738,19 @@ function renderDetails(area) {
   $('#status-details').innerHTML = details.content;
 }
 
-function renderDataStatus(months = availableMonths()) {
+function renderDataStatus(months) {
   const badge = $('#data-status');
-  if (state.sync.running) { badge.textContent = 'Sincronizando…'; return; }
+  if (state.sync.running) { badge.textContent = syncBadgeText(); return; }
   if (state.sync.error) { badge.textContent = 'Falha na sincronização'; return; }
-  badge.textContent = months.length ? `${months.length} competências carregadas` : 'Aguardando dados';
+  // A lista só importa aqui. Calcular no parâmetro faria o relógio de espera varrer
+  // dezenas de milhares de registros a cada segundo, sem usar o resultado.
+  const list = months ?? availableMonths();
+  badge.textContent = list.length ? `${list.length} competências carregadas` : 'Aguardando dados';
 }
 
 /** Texto da tela enquanto a primeira competência não fecha. */
 function syncingMessage() {
-  return state.sync.message || 'Buscando dados no Hub. A primeira competência aparece em alguns segundos.';
+  return waitMessage() || state.sync.message || 'Buscando dados no Hub. A primeira competência aparece em alguns segundos.';
 }
 
 function renderSyncStatus() {
@@ -700,9 +762,10 @@ function renderSyncStatus() {
   $('#sync-now').disabled = state.sync.running;
   $('#sync-full').disabled = state.sync.running;
 
+  const live = waitMessage() || state.sync.message;
   const message = $('#sync-message');
-  message.textContent = state.sync.error || state.sync.message;
-  message.className = `sync-message${state.sync.error ? ' is-error' : state.sync.message ? ' is-ok' : ''}`;
+  message.textContent = state.sync.error || live;
+  message.className = `sync-message${state.sync.error ? ' is-error' : live ? ' is-ok' : ''}`;
 
   // O progresso chega a cada página; a tela vazia acompanha sem esperar o `render()`,
   // que só roda quando o mês fecha.

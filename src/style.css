@@ -176,7 +176,11 @@ h3 { font-size: 15px; }
   padding: 12px 14px; border-radius: 10px;
   display: flex; align-items: center; gap: 9px;
   color: var(--muted); font-size: 13px; white-space: nowrap;
+  font-family: inherit; text-align: left; cursor: pointer;
+  transition: border-color .15s, color .15s;
 }
+.hero-badge:hover { border-color: var(--orange); color: var(--ink); }
+.hero-badge:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 5px var(--pulse-ring); }
 
 /* Filtros e abas -------------------------------------------------------- */

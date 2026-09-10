@@ -70,6 +70,14 @@ para depois: o primeiro mês caiu de 17s para 5,1s, medido. A tela vazia também
 de mandar "sincronize na engrenagem" durante uma sincronização em curso — passa a
 mostrar o progresso real.
 
+**12. Badge do cabeçalho vivo e clicável** (v1.5.3). Ele dizia só "Sincronizando…"
+e só reavaliava quando um mês inteiro fechava, então nas esperas de 40–50s do limite
+da API o dashboard parecia travado. Passa a mostrar o mês e a posição
+(`Sincronizando jul/2025 · mês 14 de 21`) e a contar a espera para baixo
+(`retomando em 42s`), chegando a `retomando…` em vez de travar no zero. Clicar abre a
+engrenagem na aba Dados. O painel usa a mesma fonte, para não contar num lugar e
+congelar no outro.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10
