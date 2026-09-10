@@ -79,8 +79,6 @@ Coloque os arquivos oficiais em `public/`:
 - `logo-branca.png` — tema escuro
 - `logo-preta.png` — tema claro
 
-Enquanto os PNGs não existirem, o dashboard usa os SVGs provisórios do mesmo diretório.
-
 ## Supabase
 
 1. Crie um projeto no Supabase.

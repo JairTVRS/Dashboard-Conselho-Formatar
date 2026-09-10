@@ -1,5 +1,5 @@
 const THEME_KEY = 'formatar-dashboard-theme';
-const LOGO_BASE = { light: '/logo-preta', dark: '/logo-branca' };
+const LOGO = { light: '/logo-preta.png', dark: '/logo-branca.png' };
 const CANVAS = { light: '#f3f3f3', dark: '#0d0d0d' };
 
 export function preferredTheme() {
@@ -14,25 +14,9 @@ export function preferredTheme() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-/**
- * A logo aponta para os PNGs oficiais e cai para o SVG provisório caso o arquivo
- * não exista, então basta colocar `logo-branca.png` e `logo-preta.png` em `public/`.
- */
 function applyLogo(theme) {
   const logo = document.querySelector('#brand-logo');
-  if (!logo) return;
-  logo.dataset.fallback = 'pending';
-  logo.src = `${LOGO_BASE[theme]}.png`;
-}
-
-function bindLogoFallback() {
-  const logo = document.querySelector('#brand-logo');
-  if (!logo) return;
-  logo.addEventListener('error', () => {
-    if (logo.dataset.fallback === 'done') return;
-    logo.dataset.fallback = 'done';
-    logo.src = logo.src.replace(/\.png(\?.*)?$/, '.svg');
-  });
+  if (logo) logo.src = LOGO[theme];
 }
 
 export function applyTheme(theme) {
@@ -49,7 +33,6 @@ export function applyTheme(theme) {
 }
 
 export function initTheme(onChange) {
-  bindLogoFallback();
   let theme = preferredTheme();
   applyTheme(theme);
 

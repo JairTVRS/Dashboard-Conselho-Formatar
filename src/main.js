@@ -38,7 +38,7 @@ app.innerHTML = `
   <main class="shell">
     <header class="hero">
       <div class="hero-brand">
-        <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="316" height="104" />
+        <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="964" height="267" />
         <div>
           <p class="eyebrow">CONSELHO FORMATAR / GESTÃO</p>
           <h1>Indicadores Operacionais</h1>
