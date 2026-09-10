@@ -12,14 +12,14 @@ npm run dev
 ```
 
 O servidor do Vite expõe `/api/v1/*` como proxy para `https://hub.formatar.com.br/v1`,
-injetando o header `x-secret-key` no servidor. A chave nunca chega ao navegador.
+injetando o header `Authorization: Bearer <secret key>` no servidor. A chave nunca chega ao navegador.
 
 ## Integração com o Hub
 
 | Item | Valor |
 |---|---|
 | Upstream | `https://hub.formatar.com.br/v1` |
-| Autenticação | header `x-secret-key` |
+| Autenticação | header `Authorization: Bearer <secret key>` |
 | Endpoints usados | `GET /meetings`, `GET /tasks`, `GET /customers` |
 | Janela sincronizada | 1º de janeiro do ano anterior até hoje (móvel) |
 
@@ -74,10 +74,10 @@ Em **Cloudflare Pages → Configurações → Variáveis e segredos**, crie um s
 |---|---|
 | `HUB_API_SECRET_KEY` | a secret key do Hub, sem prefixo `Bearer` |
 
-O nome `Authorization` também é aceito, por compatibilidade. Depois de criar o
-segredo é necessário um novo deploy para que a função passe a enxergá-lo. Sem a
-variável, o dashboard abre normalmente e a engrenagem indica que a conexão não
-está configurada.
+Guarde a chave crua: o prefixo `Bearer` é montado pelo proxy na hora da chamada.
+Depois de criar o segredo é necessário um novo deploy para que a função passe a
+enxergá-lo. Sem a variável, o dashboard abre normalmente e a engrenagem indica que
+a conexão não está configurada.
 
 `functions/api/[[path]].js` é a Pages Function que faz o proxy: aceita apenas `GET`
 e apenas os recursos `meetings`, `tasks` e `customers`.
@@ -107,4 +107,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.4.2`.
+A versão atual do projeto é `1.4.3`.

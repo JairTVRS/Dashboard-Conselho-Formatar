@@ -6,7 +6,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const secret = String(env.HUB_API_SECRET_KEY || env.Authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const secret = String(env.HUB_API_SECRET_KEY || '').replace(/^Bearer\s+/i, '').trim();
 
   // A API recusa qualquer chamada que pareça vir de um navegador
   // (403 BROWSER_ORIGIN_NOT_ALLOWED), então o proxy precisa remover os headers
@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
         server.on('proxyReq', (request) => {
           BROWSER_HEADERS.forEach((header) => request.removeHeader(header));
           request.setHeader('accept', 'application/json');
-          if (secret) request.setHeader('x-secret-key', secret);
+          if (secret) request.setHeader('authorization', `Bearer ${secret}`);
         });
       }
     }
