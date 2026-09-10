@@ -58,6 +58,18 @@ indicador dobraria — e isso ia acontecer no primeiro sync bem-sucedido de quem
 o dashboard. Reuniões e tarefas hoje só vêm da API, então as linhas sem `id` são
 descartadas ao abrir. Os pagamentos, que continuam sendo importados à mão, ficam.
 
+**10. Cores do cabeçalho por classe** (v1.5.2). Eram pintadas por posição
+(`nth-child`), então com a comparação oculta as colunas de mês assumiam a posição das
+que sumiram e herdavam o cinza do acumulado e o laranja da variação. Agora cada
+coluna leva classe própria: mês preto, acumulado cinza, variação laranja, texto
+branco em todas.
+
+**11. Primeira competência em 5s** (v1.5.2). A classificação dos clientes eram 10
+páginas buscadas antes do primeiro mês, sem entrar em nenhum número da tabela. Movida
+para depois: o primeiro mês caiu de 17s para 5,1s, medido. A tela vazia também deixou
+de mandar "sincronize na engrenagem" durante uma sincronização em curso — passa a
+mostrar o progresso real.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10

@@ -56,18 +56,28 @@ export function variationClass(variation) {
   return 'variation-neutral';
 }
 
+/**
+ * As colunas levam classe própria em vez de serem pintadas por posição: quando a
+ * comparação está oculta, as colunas de mês assumem a posição das que sumiram e
+ * herdariam o cinza do acumulado e o laranja da variação.
+ */
 export function tableMarkup(rows, visibleMonths) {
   const comparison = comparisonPeriod(visibleMonths);
-  const head = `<thead><tr><th>Indicador</th>${comparison.comparable ? `<th>${comparison.previousLabel}</th>` : ''}<th>${comparison.currentLabel}</th>${comparison.comparable ? '<th>Variação</th>' : ''}${visibleMonths.map((month) => `<th>${monthLabel(month)}</th>`).join('')}</tr></thead>`;
+  const previousHead = comparison.comparable ? `<th class="col-previous">${comparison.previousLabel}</th>` : '';
+  const variationHead = comparison.comparable ? '<th class="col-variation">Variação</th>' : '';
+  const monthHeads = visibleMonths.map((month) => `<th class="col-month">${monthLabel(month)}</th>`).join('');
+  const head = `<thead><tr><th class="col-label">Indicador</th>${previousHead}<th class="col-current">${comparison.currentLabel}</th>${variationHead}${monthHeads}</tr></thead>`;
+
   const body = rows.map((row) => {
     const current = accumulated(row, comparison.currentMonths, comparison.endMonth);
-    const cells = visibleMonths.map((month) => `<td>${row.format(row.value(month))}</td>`).join('');
+    const cells = visibleMonths.map((month) => `<td class="col-month">${row.format(row.value(month))}</td>`).join('');
     if (!comparison.comparable) {
-      return `<tr><th>${row.label}</th><td>${row.format(current)}</td>${cells}</tr>`;
+      return `<tr><th class="col-label">${row.label}</th><td class="col-current">${row.format(current)}</td>${cells}</tr>`;
     }
     const previous = accumulated(row, comparison.previousMonths, comparison.endMonth);
     const variation = previous ? (current / previous - 1) * 100 : null;
-    return `<tr><th>${row.label}</th><td>${row.format(previous)}</td><td>${row.format(current)}</td><td class="variation-cell ${variationClass(variation)}">${variation === null ? '-' : `${formatNumber(variation, 2)}%`}</td>${cells}</tr>`;
+    return `<tr><th class="col-label">${row.label}</th><td class="col-previous">${row.format(previous)}</td><td class="col-current">${row.format(current)}</td><td class="col-variation variation-cell ${variationClass(variation)}">${variation === null ? '-' : `${formatNumber(variation, 2)}%`}</td>${cells}</tr>`;
   }).join('');
-  return `<table class="indicator-table">${head}<tbody>${body}</tbody></table>`;
+
+  return `<table class="indicator-table${comparison.comparable ? '' : ' without-comparison'}">${head}<tbody>${body}</tbody></table>`;
 }

@@ -295,6 +295,20 @@ async function commitRows(patch) {
   await persistState();
 }
 
+/**
+ * Busca a classificação dos clientes e reaplica ao que já está em cache. Roda depois
+ * do primeiro mês, para não segurar a primeira competência na tela.
+ */
+async function refreshClassifications(onProgress) {
+  const classifications = await fetchClassifications({ onProgress });
+  state.data.classifications = classifications;
+  state.data.meetings = applyClassifications(state.data.meetings);
+  state.data.tasks = applyClassifications(state.data.tasks);
+  await persistState();
+  render();
+  return classifications;
+}
+
 /** Estende a cobertura para trás; as fases vêm da mais recente para a mais antiga. */
 function extendCoverage({ start, end }) {
   const current = state.sync.coverage;
@@ -348,25 +362,26 @@ async function runSync({ incremental }) {
   const onProgress = syncProgress(progress);
 
   try {
-    const classifications = await fetchClassifications({ onProgress });
-    state.data.classifications = classifications;
-
     const phases = pendingPhases();
 
     if (phases.length) {
-      // Carga em fases: a mais recente primeiro, para o dashboard ficar utilizável
-      // antes de a janela inteira chegar. Cada fase encadeia a seguinte sozinha.
+      // Carga mês a mês, do mais recente para o mais antigo, cada um encadeando o
+      // seguinte. As classificações são 10 páginas e não entram em nenhum número da
+      // tabela — buscá-las antes atrasaria o primeiro mês em segundos que a pessoa
+      // passa olhando para tela vazia, então elas vêm logo depois.
       for (let index = 0; index < phases.length; index += 1) {
         const phase = phases[index];
         state.sync.phase = { label: phase.label, background: index > 0 };
         renderSyncStatus();
-        await syncRange({ ...phase, classifications, onProgress, onStageDone: commitRows });
+        await syncRange({ ...phase, classifications: state.data.classifications, onProgress, onStageDone: commitRows });
         extendCoverage(phase);
         state.sync.lastSync = new Date().toISOString();
         await persistState();
         render();
+        if (index === 0) await refreshClassifications(onProgress);
       }
     } else {
+      const classifications = await refreshClassifications(onProgress);
       // Período já coberto: puxa o que mudou. A faixa recente vai sem filtro de
       // `updatedAt` porque um registro pode entrar na janela só pelo tempo passar —
       // uma tarefa que vence hoje, criada e não tocada há semanas, o filtro perderia.
@@ -642,7 +657,9 @@ function renderIndicatorPanel(area, months) {
   const table = $('#indicator-table');
   if (area.isEmpty(context()) || !months.length) {
     table.className = 'indicator-table-wrap empty-state';
-    table.textContent = area.emptyMessage;
+    // Enquanto a primeira competência não fecha, mandar "sincronize na engrenagem"
+    // é enganoso: a sincronização já está rodando e não há nada a fazer.
+    table.textContent = state.sync.running && !area.pending ? syncingMessage() : area.emptyMessage;
     return;
   }
 
@@ -669,6 +686,11 @@ function renderDataStatus(months = availableMonths()) {
   badge.textContent = months.length ? `${months.length} competências carregadas` : 'Aguardando dados';
 }
 
+/** Texto da tela enquanto a primeira competência não fecha. */
+function syncingMessage() {
+  return state.sync.message || 'Buscando dados no Hub. A primeira competência aparece em alguns segundos.';
+}
+
 function renderSyncStatus() {
   const period = syncWindow();
   $('#window-label').textContent = `${monthLabel(monthKey(period.start))} até ${monthLabel(monthKey(period.end))}`;
@@ -681,6 +703,11 @@ function renderSyncStatus() {
   const message = $('#sync-message');
   message.textContent = state.sync.error || state.sync.message;
   message.className = `sync-message${state.sync.error ? ' is-error' : state.sync.message ? ' is-ok' : ''}`;
+
+  // O progresso chega a cada página; a tela vazia acompanha sem esperar o `render()`,
+  // que só roda quando o mês fecha.
+  const table = $('#indicator-table');
+  if (state.sync.running && table?.classList.contains('empty-state')) table.textContent = syncingMessage();
 }
 
 function renderUploadStatus() {

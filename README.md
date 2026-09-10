@@ -42,8 +42,12 @@ primeira carga não custe tudo o que já foi baixado.
 
 Como a janela inteira leva uns 16 minutos, a carga é fatiada **mês a mês, do mais
 recente para o mais antigo**, e cada mês encadeia o seguinte em segundo plano. O mês
-corrente fica visível em torno de 20 segundos e a linha do tempo cresce para trás
+corrente fica visível em torno de **5 segundos** e a linha do tempo cresce para trás
 enquanto a pessoa já analisa.
+
+A classificação dos clientes (`GET /customers`, 10 páginas) é buscada **depois** do
+primeiro mês: ela não entra em nenhum número da tabela, só no filtro, e buscá-la
+antes atrasava a primeira competência em segundos gastos olhando para tela vazia.
 
 Fatiar em blocos grandes não resolvia o primeiro acesso: a tela só libera quando o
 bloco fecha em reuniões *e* tarefas, então um bloco de 6 meses deixava a tela vazia
@@ -157,4 +161,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.5.1`.
+A versão atual do projeto é `1.5.2`.

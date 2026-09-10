@@ -200,19 +200,25 @@ h3 { font-size: 15px; }
 .indicator-table { width: 100%; min-width: 1120px; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .indicator-table th, .indicator-table td { border-bottom: 1px solid var(--cell-line); padding: 12px 13px; white-space: nowrap; text-align: right; }
 .indicator-table thead th { background: var(--head-bg); color: var(--head-ink); font-weight: 700; }
-.indicator-table thead th:first-child { text-align: left; min-width: 290px; }
-.indicator-table thead th:nth-child(2), .indicator-table thead th:nth-child(3) { background: var(--head-alt); }
-.indicator-table thead th:nth-child(4) { background: var(--orange); }
+/* Cores do cabeçalho por classe, nunca por posição: com a comparação oculta as
+   colunas de mês ocupam a posição das que sumiram e herdariam a cor errada.
+   Mês a mês preto, acumulado cinza, variação laranja — todos com texto branco. */
+.indicator-table thead th.col-label { text-align: left; min-width: 290px; }
+.indicator-table thead th.col-previous, .indicator-table thead th.col-current { background: var(--head-alt); }
+.indicator-table thead th.col-variation { background: var(--orange); }
+.indicator-table thead th.col-month { background: var(--head-bg); }
 .indicator-table tbody th { color: var(--ink); text-align: left; font-weight: 500; }
 .indicator-table tbody td { color: var(--ink); font-weight: 500; }
 .indicator-table tbody tr:nth-child(even) { background: var(--row-alt); }
 .indicator-table tbody tr:hover, .indicator-table tbody tr:nth-child(even):hover { background: var(--row-hover); }
-.indicator-table thead th:nth-child(1), .indicator-table tbody th { position: sticky; left: 0; z-index: 3; width: 290px; min-width: 290px; }
-.indicator-table thead th:nth-child(2), .indicator-table tbody td:nth-child(2) { position: sticky; left: 290px; z-index: 3; width: 132px; min-width: 132px; }
-.indicator-table thead th:nth-child(3), .indicator-table tbody td:nth-child(3) { position: sticky; left: 422px; z-index: 3; width: 132px; min-width: 132px; }
-.indicator-table thead th:nth-child(4), .indicator-table tbody td:nth-child(4) { position: sticky; left: 554px; z-index: 3; width: 112px; min-width: 112px; box-shadow: 5px 0 7px -7px var(--ink); }
-.indicator-table tbody th, .indicator-table tbody td:nth-child(2), .indicator-table tbody td:nth-child(3), .indicator-table tbody td:nth-child(4) { background: var(--paper); }
-.indicator-table tbody tr:nth-child(even) th, .indicator-table tbody tr:nth-child(even) td:nth-child(2), .indicator-table tbody tr:nth-child(even) td:nth-child(3) { background: var(--row-alt); }
+.indicator-table th.col-label, .indicator-table tbody th { position: sticky; left: 0; z-index: 3; width: 290px; min-width: 290px; }
+.indicator-table th.col-previous, .indicator-table td.col-previous { position: sticky; left: 290px; z-index: 3; width: 132px; min-width: 132px; }
+.indicator-table th.col-current, .indicator-table td.col-current { position: sticky; left: 422px; z-index: 3; width: 132px; min-width: 132px; }
+.indicator-table th.col-variation, .indicator-table td.col-variation { position: sticky; left: 554px; z-index: 3; width: 112px; min-width: 112px; box-shadow: 5px 0 7px -7px var(--ink); }
+/* Sem comparação o acumulado encosta no rótulo e passa a ser a última coluna fixa. */
+.indicator-table.without-comparison th.col-current, .indicator-table.without-comparison td.col-current { left: 290px; box-shadow: 5px 0 7px -7px var(--ink); }
+.indicator-table tbody th, .indicator-table tbody td.col-previous, .indicator-table tbody td.col-current, .indicator-table tbody td.col-variation { background: var(--paper); }
+.indicator-table tbody tr:nth-child(even) th, .indicator-table tbody tr:nth-child(even) td.col-previous, .indicator-table tbody tr:nth-child(even) td.col-current { background: var(--row-alt); }
 .variation-cell { font-weight: 700 !important; }
 .variation-good { background: var(--good) !important; color: var(--variation-ink) !important; }
 .variation-bad { background: var(--bad) !important; color: var(--variation-ink) !important; }
