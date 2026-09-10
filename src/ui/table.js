@@ -1,17 +1,36 @@
 import { monthLabel, shortMonth } from '../lib/dates.js';
 import { formatNumber } from '../lib/format.js';
 
+/** Rótulo do que a coluna soma de fato — nunca um período fixo no código. */
+function rangeLabel(months) {
+  if (!months.length) return '';
+  const stamp = (month) => `${shortMonth(Number(month.split('-')[1]))}/${month.split('-')[0].slice(-2)}`;
+  const first = months[0];
+  const last = months[months.length - 1];
+  return first === last ? stamp(first) : `${stamp(first)} a ${stamp(last)}`;
+}
+
 export function comparisonPeriod(months) {
   const endMonth = Number(months[months.length - 1].split('-')[1]);
   const currentYear = Number(months[months.length - 1].split('-')[0]);
   const previousYear = currentYear - 1;
   const range = (year) => months.filter((month) => Number(month.split('-')[0]) === year && Number(month.split('-')[1]) <= endMonth);
+  const currentMonths = range(currentYear);
+  const previousMonths = range(previousYear);
+
+  // Durante a carga em fases um dos anos chega antes do outro. Comparar
+  // jan–set de um contra abr–set do outro produziria uma variação inventada,
+  // então a comparação só aparece quando os dois lados cobrem os mesmos meses.
+  const shape = (list) => list.map((month) => month.split('-')[1]).join(',');
+  const comparable = previousMonths.length > 0 && shape(previousMonths) === shape(currentMonths);
+
   return {
     endMonth,
-    currentMonths: range(currentYear),
-    previousMonths: range(previousYear),
-    previousLabel: `jan/${String(previousYear).slice(-2)} a ${shortMonth(endMonth)}/${String(previousYear).slice(-2)}`,
-    currentLabel: `jan/${String(currentYear).slice(-2)} a ${shortMonth(endMonth)}/${String(currentYear).slice(-2)}`
+    currentMonths,
+    previousMonths,
+    comparable,
+    previousLabel: rangeLabel(previousMonths),
+    currentLabel: rangeLabel(currentMonths)
   };
 }
 
@@ -39,12 +58,15 @@ export function variationClass(variation) {
 
 export function tableMarkup(rows, visibleMonths) {
   const comparison = comparisonPeriod(visibleMonths);
-  const head = `<thead><tr><th>Indicador</th><th>${comparison.previousLabel}</th><th>${comparison.currentLabel}</th><th>Variação</th>${visibleMonths.map((month) => `<th>${monthLabel(month)}</th>`).join('')}</tr></thead>`;
+  const head = `<thead><tr><th>Indicador</th>${comparison.comparable ? `<th>${comparison.previousLabel}</th>` : ''}<th>${comparison.currentLabel}</th>${comparison.comparable ? '<th>Variação</th>' : ''}${visibleMonths.map((month) => `<th>${monthLabel(month)}</th>`).join('')}</tr></thead>`;
   const body = rows.map((row) => {
-    const previous = accumulated(row, comparison.previousMonths, comparison.endMonth);
     const current = accumulated(row, comparison.currentMonths, comparison.endMonth);
-    const variation = previous ? (current / previous - 1) * 100 : null;
     const cells = visibleMonths.map((month) => `<td>${row.format(row.value(month))}</td>`).join('');
+    if (!comparison.comparable) {
+      return `<tr><th>${row.label}</th><td>${row.format(current)}</td>${cells}</tr>`;
+    }
+    const previous = accumulated(row, comparison.previousMonths, comparison.endMonth);
+    const variation = previous ? (current / previous - 1) * 100 : null;
     return `<tr><th>${row.label}</th><td>${row.format(previous)}</td><td>${row.format(current)}</td><td class="variation-cell ${variationClass(variation)}">${variation === null ? '-' : `${formatNumber(variation, 2)}%`}</td>${cells}</tr>`;
   }).join('');
   return `<table class="indicator-table">${head}<tbody>${body}</tbody></table>`;

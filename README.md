@@ -21,10 +21,53 @@ injetando o header `Authorization: Bearer <secret key>` no servidor. A chave nun
 | Upstream | `https://hub.formatar.com.br/v1` |
 | Autenticação | header `Authorization: Bearer <secret key>` |
 | Endpoints usados | `GET /meetings`, `GET /tasks`, `GET /customers` |
+| Limite de requisições | **50 por minuto** (`RateLimit-Policy: 50;w=60`) |
+| Tamanho da página | 100 linhas, fixo — a API ignora `limit`, `perPage` e afins |
 | Janela sincronizada | 1º de janeiro do ano anterior até hoje (móvel) |
 
+### Limite de requisições
+
+A API aceita 50 requisições por minuto e entrega 100 linhas por página, sem
+parâmetro para pedir páginas maiores. Uma carga completa da janela passa de 780
+páginas, então **esperar a janela reabrir faz parte do fluxo normal** e a primeira
+carga leva por volta de 15 minutos.
+
+O proxy repassa os headers `RateLimit-*` e `Retry-After` justamente para o navegador
+poder se autorregular: `src/api/hub.js` segura a próxima chamada quando restam
+poucas requisições e, num `429`, espera o tempo que a própria API informa. Cada
+recurso é gravado no IndexedDB assim que termina, para que fechar a aba no meio da
+primeira carga não custe tudo o que já foi baixado.
+
+### Carga em fases
+
+Como a janela inteira leva uns 16 minutos, a primeira carga é fatiada da mais
+recente para a mais antiga, e cada fase encadeia a seguinte em segundo plano:
+
+| Fase | Período | Pronto em |
+|---|---|---|
+| 1 | últimos 6 meses | ~4,5 min |
+| 2 | restante do ano corrente | ~6,5 min |
+| 3 | ano anterior | ~16 min |
+
+Fases vazias são descartadas, e é isso que faz o começo do ano funcionar sem regra
+especial: em janeiro os "últimos 6 meses" já invadem o ano anterior e a fase 2 some.
+
+O que a tela exibe é decidido pela **cobertura**, gravada junto do cache: ela só
+avança quando a fase fecha em *todos* os recursos. Sem isso a tela mostraria
+reuniões cheias e zero tarefas no intervalo entre uma e outra. Pela mesma razão, um
+`Pagamentos.csv` com meses fora da cobertura não estica a linha do tempo — as linhas
+ficam no cache e entram quando a fase correspondente terminar.
+
+Enquanto os dois anos não estiverem cobertos pelos mesmos meses, as colunas de ano
+anterior e de variação não aparecem, e a coluna acumulada é rotulada com o período
+que ela realmente soma. Comparar jan–set de um ano contra abr–set do outro seria uma
+variação inventada.
+
 A sincronização roda automaticamente ao abrir o dashboard, de forma incremental
-(`updatedAt[$gte]` a partir do último sync). O botão **Recarregar janela completa**,
+(`updatedAt[$gte]` a partir do último sync). A faixa dos últimos 30 dias é sempre
+recarregada **sem** esse filtro: a janela termina em "hoje" e avança sozinha, então
+uma tarefa que vence hoje, criada e não tocada há semanas, entraria na janela sem
+que o `updatedAt` mudasse — e o incremental a perderia. O botão **Recarregar janela completa**,
 na engrenagem, refaz a busca inteira — é o que reconcilia registros excluídos no Hub.
 Os dados ficam em cache no IndexedDB do navegador, então o dashboard abre preenchido
 mesmo antes de a sincronização terminar.
@@ -116,4 +159,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.4.4`.
+A versão atual do projeto é `1.5.0`.

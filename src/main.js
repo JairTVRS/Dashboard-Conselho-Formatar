@@ -4,7 +4,7 @@ import { monthKey, monthLabel, dateTimeLabel } from './lib/dates.js';
 import { formatNumber } from './lib/format.js';
 import { tableMarkup } from './ui/table.js';
 import { areas, areaById, areaByPath } from './areas/index.js';
-import { syncAll, syncWindow, testConnection, HubError } from './api/hub.js';
+import { syncPhases, recentWindow, syncWindow, fetchClassifications, syncRange, testConnection, HubError } from './api/hub.js';
 import { initTheme } from './theme.js';
 
 const STORAGE_KEY = 'formatar-dashboard-operational-data-v1';
@@ -17,7 +17,9 @@ const COLLAPSE_BREAKPOINT = 1100;
 const state = {
   data: { meetings: [], tasks: [], payments: [], classifications: {} },
   fileMeta: { payments: { name: '', latest: '', loaded: false } },
-  sync: { lastSync: '', running: false, error: '', message: '' },
+  // `coverage` é a faixa de competência realmente carregada de ponta a ponta.
+  // Só ela decide o que a tela exibe; linhas fora dela ficam no cache esperando.
+  sync: { lastSync: '', running: false, error: '', message: '', coverage: null, phase: null },
   excludedDates: new Set(),
   month: 'all',
   area: 'operacoes',
@@ -284,37 +286,106 @@ function mergeActivities(kind, incoming) {
 
 /* Sincronização ------------------------------------------------------------ */
 
+const STAGE_LABELS = { customers: 'clientes', meetings: 'reuniões', tasks: 'tarefas' };
+
+/** Guarda o que chegou. A tela só passa a exibir quando a cobertura avançar. */
+async function commitRows(patch) {
+  if (patch.meetings) state.data.meetings = applyClassifications(mergeActivities('meetings', patch.meetings));
+  if (patch.tasks) state.data.tasks = applyClassifications(mergeActivities('tasks', patch.tasks));
+  await persistState();
+}
+
+/** Estende a cobertura para trás; as fases vêm da mais recente para a mais antiga. */
+function extendCoverage({ start, end }) {
+  const current = state.sync.coverage;
+  state.sync.coverage = {
+    from: current && current.from < start ? current.from : start,
+    to: current && current.to > end ? current.to : end
+  };
+}
+
+function syncProgress(progress) {
+  return ({ stage, loaded, total, waitingSeconds }) => {
+    const phase = state.sync.phase;
+    const scope = phase ? ` de ${phase.label}` : '';
+    // A partir da segunda fase a carga é de fundo: dizer o que ela destrava evita
+    // que as colunas ausentes pareçam defeito.
+    const note = phase?.background ? ' O comparativo com o ano anterior fica disponível ao terminar.' : '';
+
+    if (waitingSeconds) {
+      state.sync.message = `Limite de requisições da API atingido. Retomando ${STAGE_LABELS[stage]}${scope} em ${waitingSeconds}s.${note}`;
+      renderSyncStatus();
+      return;
+    }
+    const percent = total ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+    progress.firstElementChild.style.width = `${percent}%`;
+    state.sync.message = `Carregando ${STAGE_LABELS[stage]}${scope}: ${loaded.toLocaleString('pt-BR')}${total ? ` de ${total.toLocaleString('pt-BR')}` : ''}.${note}`;
+    renderSyncStatus();
+  };
+}
+
+/**
+ * Fases que ainda faltam, da mais recente para a mais antiga. A comparação é só
+ * pela borda antiga: a janela termina em "hoje" e avança todo dia, e essa ponta
+ * quem cobre é a recarga da faixa recente. Comparar pela borda nova faria a fase
+ * de 6 meses recomeçar do zero a cada dia.
+ */
+function pendingPhases() {
+  const coverage = state.sync.coverage;
+  return syncPhases().filter((phase) => !coverage || phase.start < coverage.from);
+}
+
 async function runSync({ incremental }) {
   if (state.sync.running) return;
   state.sync.running = true;
   state.sync.error = '';
+  if (!incremental) state.sync.coverage = null;
   renderSyncStatus();
   renderDataStatus();
 
-  const since = incremental ? state.sync.lastSync : '';
   const progress = $('#sync-progress');
   progress.hidden = false;
-  const labels = { customers: 'clientes', meetings: 'reuniões', tasks: 'tarefas' };
+  const onProgress = syncProgress(progress);
 
   try {
-    const result = await syncAll({
-      since,
-      onProgress: ({ stage, loaded, total }) => {
-        const percent = total ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
-        progress.firstElementChild.style.width = `${percent}%`;
-        state.sync.message = `Carregando ${labels[stage]}: ${loaded.toLocaleString('pt-BR')}${total ? ` de ${total.toLocaleString('pt-BR')}` : ''}`;
-        renderSyncStatus();
-      }
-    });
+    const classifications = await fetchClassifications({ onProgress });
+    state.data.classifications = classifications;
 
-    state.data.classifications = result.classifications;
-    state.data.meetings = applyClassifications(mergeActivities('meetings', result.meetings));
-    state.data.tasks = applyClassifications(mergeActivities('tasks', result.tasks));
-    state.sync.lastSync = result.syncedAt;
-    state.sync.message = `${result.incremental ? 'Sincronização incremental' : 'Recarga completa'} concluída: ${result.meetings.length.toLocaleString('pt-BR')} reuniões e ${result.tasks.length.toLocaleString('pt-BR')} tarefas recebidas.`;
+    const phases = pendingPhases();
+
+    if (phases.length) {
+      // Carga em fases: a mais recente primeiro, para o dashboard ficar utilizável
+      // antes de a janela inteira chegar. Cada fase encadeia a seguinte sozinha.
+      for (let index = 0; index < phases.length; index += 1) {
+        const phase = phases[index];
+        state.sync.phase = { label: phase.label, background: index > 0 };
+        renderSyncStatus();
+        await syncRange({ ...phase, classifications, onProgress, onStageDone: commitRows });
+        extendCoverage(phase);
+        state.sync.lastSync = new Date().toISOString();
+        await persistState();
+        render();
+      }
+    } else {
+      // Período já coberto: puxa o que mudou. A faixa recente vai sem filtro de
+      // `updatedAt` porque um registro pode entrar na janela só pelo tempo passar —
+      // uma tarefa que vence hoje, criada e não tocada há semanas, o filtro perderia.
+      const recent = recentWindow();
+      await syncRange({ ...recent, classifications, onProgress, onStageDone: commitRows });
+      const covered = state.sync.coverage;
+      if (covered && covered.from < recent.start) {
+        await syncRange({ start: covered.from, end: recent.start, since: state.sync.lastSync, classifications, onProgress, onStageDone: commitRows });
+      }
+      extendCoverage({ start: recent.start, end: syncWindow().end });
+      state.sync.lastSync = new Date().toISOString();
+    }
+
+    state.sync.phase = null;
+    state.sync.message = describeCoverage();
     await persistState();
     render();
   } catch (error) {
+    state.sync.phase = null;
     state.sync.error = error instanceof HubError ? error.message : `Falha na sincronização: ${error.message}`;
     state.sync.message = '';
   } finally {
@@ -324,6 +395,14 @@ async function runSync({ incremental }) {
     renderSyncStatus();
     renderDataStatus();
   }
+}
+
+/** Mensagem de fim: diz o que já dá para analisar e o que ainda falta. */
+function describeCoverage() {
+  const pending = pendingPhases();
+  const totals = `${state.data.meetings.length.toLocaleString('pt-BR')} reuniões e ${state.data.tasks.length.toLocaleString('pt-BR')} tarefas em cache.`;
+  if (!pending.length) return `Sincronização concluída: ${totals}`;
+  return `Carregando ${pending[0].label} em segundo plano — o comparativo com o ano anterior fica disponível ao terminar. ${totals}`;
 }
 
 /** Reaplica a classificação vinda de `customers` a todos os registros em cache. */
@@ -348,7 +427,7 @@ async function runConnectionTest() {
 async function clearCache() {
   state.data = { meetings: [], tasks: [], payments: [], classifications: {} };
   state.fileMeta.payments = { name: '', latest: '', loaded: false };
-  state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.' };
+  state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.', coverage: null, phase: null };
   await persistState();
   render();
 }
@@ -372,7 +451,8 @@ function serializableState() {
     classifications: state.data.classifications,
     fileMeta: state.fileMeta,
     excludedDates: [...state.excludedDates],
-    lastSync: state.sync.lastSync
+    lastSync: state.sync.lastSync,
+    coverage: state.sync.coverage
   };
 }
 
@@ -406,6 +486,17 @@ async function restoreState() {
     state.fileMeta = { ...state.fileMeta, ...(source.fileMeta || {}) };
     state.excludedDates = new Set(source.excludedDates || []);
     state.sync.lastSync = source.lastSync || '';
+    state.sync.coverage = source.coverage || null;
+
+    // Cache anterior à integração: as atividades vinham de planilha e não têm `id`.
+    // A chave delas é o `nid`, e a das linhas da API é o `id`, então as mesmas
+    // atividades entrariam duas vezes e todo indicador dobraria. Como reuniões e
+    // tarefas hoje só vêm da API, essas linhas são descartadas — os pagamentos,
+    // que continuam sendo importados à mão, ficam.
+    if (!state.sync.coverage) {
+      state.data.meetings = state.data.meetings.filter((item) => item.id);
+      state.data.tasks = state.data.tasks.filter((item) => item.id);
+    }
     if (legacy) {
       await persistState();
       localStorage.removeItem(STORAGE_KEY);
@@ -448,7 +539,15 @@ function context() {
 }
 
 function availableMonths() {
-  const months = [...new Set([...state.data.meetings, ...state.data.tasks, ...state.data.payments].map((item) => item.month).filter(Boolean))].sort();
+  const coverage = state.sync.coverage;
+  const inCoverage = (month) => !coverage || (month >= coverage.from.slice(0, 7) && month <= coverage.to.slice(0, 7));
+
+  // Recorta pela cobertura, senão um `Pagamentos.csv` com linhas de 2025 traria os
+  // meses de 2025 de volta à tabela durante a primeira fase, exibindo zero em
+  // reuniões e tarefas — número errado com cara de certo.
+  const months = [...new Set([...state.data.meetings, ...state.data.tasks, ...state.data.payments].map((item) => item.month).filter(Boolean))]
+    .filter(inCoverage)
+    .sort();
   if (months.length < 2) return months;
   const result = [];
   const [startYear, startMonth] = months[0].split('-').map(Number);
@@ -608,5 +707,5 @@ function renderExcludedDates() {
 
 restoreState().then(() => {
   render();
-  runSync({ incremental: Boolean(state.sync.lastSync) });
+  runSync({ incremental: true });
 });

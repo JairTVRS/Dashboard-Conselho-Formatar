@@ -1,5 +1,6 @@
 const UPSTREAM = 'https://hub.formatar.com.br/v1';
 const ALLOWED_RESOURCES = new Set(['meetings', 'tasks', 'customers']);
+const RATE_LIMIT_HEADERS = ['ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset', 'ratelimit-policy', 'retry-after'];
 
 function problem(status, type, message) {
   return new Response(JSON.stringify({ status, type, message }), {
@@ -41,6 +42,14 @@ export async function onRequest({ request, env, params }) {
   const headers = new Headers();
   headers.set('content-type', upstream.headers.get('content-type') || 'application/json; charset=utf-8');
   headers.set('cache-control', 'no-store');
+
+  // A API limita a 50 requisicoes por minuto e uma carga completa passa de 780
+  // paginas. Sem repassar estes headers o navegador nao sabe quanto falta para a
+  // janela reabrir e so consegue tentar as cegas.
+  RATE_LIMIT_HEADERS.forEach((name) => {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  });
 
   return new Response(upstream.body, { status: upstream.status, headers });
 }
