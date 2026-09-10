@@ -55,15 +55,13 @@ app.innerHTML = `
 
     <main class="shell">
       <header class="hero">
-        <div class="hero-brand">
-          <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="964" height="267" />
-          <div>
-            <p class="eyebrow" id="area-eyebrow"></p>
-            <h1 id="area-title"></h1>
-            <p class="hero-copy" id="area-subtitle"></p>
-          </div>
+        <div class="hero-text">
+          <p class="eyebrow" id="area-eyebrow"></p>
+          <h1 id="area-title"></h1>
+          <p class="hero-copy" id="area-subtitle"></p>
         </div>
         <div class="hero-actions">
+          <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="964" height="267" />
           <button type="button" class="hero-badge" id="data-status-button" title="Abrir configurações de dados"><span class="pulse"></span><span id="data-status">Aguardando dados</span></button>
         </div>
       </header>
