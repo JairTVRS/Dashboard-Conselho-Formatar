@@ -1,16 +1,36 @@
 const UPSTREAM = 'https://hub.formatar.com.br/v1';
 const ALLOWED_RESOURCES = new Set(['meetings', 'tasks', 'customers']);
 
-function problem(status, type, message) {
-  return new Response(JSON.stringify({ status, type, message }), {
+function problem(status, type, message, extra) {
+  return new Response(JSON.stringify({ status, type, message, ...extra }), {
     status,
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
   });
 }
 
+const KEY_NAMES = ['HUB_API_SECRET_KEY', 'Authorization', 'AUTHORIZATION'];
+
 function secretKey(env) {
-  const raw = env.HUB_API_SECRET_KEY || env.Authorization || env.AUTHORIZATION || '';
-  return String(raw).replace(/^Bearer\s+/i, '').trim();
+  const name = KEY_NAMES.find((candidate) => env?.[candidate]);
+  return String(name ? env[name] : '').replace(/^Bearer\s+/i, '').trim();
+}
+
+/**
+ * Só é usado quando a chave não foi encontrada, para distinguir "variável ausente"
+ * de "variável presente com valor vazio" ou nome com caractere invisível.
+ * Reporta nomes e tamanhos — nunca valores.
+ */
+function diagnostics(env) {
+  const names = env && typeof env === 'object' ? Object.keys(env) : [];
+  const strings = names.filter((name) => typeof env[name] === 'string');
+  return {
+    diagnostico: {
+      variaveis_visiveis: names.length,
+      nomes_de_texto: strings.map((name) => `${JSON.stringify(name)} (${env[name].length} caracteres)`),
+      nomes_de_binding: names.filter((name) => typeof env[name] !== 'string'),
+      procurando_por: KEY_NAMES
+    }
+  };
 }
 
 export async function onRequest({ request, env, params }) {
@@ -27,7 +47,7 @@ export async function onRequest({ request, env, params }) {
 
   const key = secretKey(env);
   if (!key) {
-    return problem(503, 'MISSING_API_KEY', 'A secret key não está configurada no ambiente do Cloudflare Pages.');
+    return problem(503, 'MISSING_API_KEY', 'A secret key não está configurada no ambiente do Cloudflare Pages.', diagnostics(env));
   }
 
   const target = new URL(`${UPSTREAM}/${resource[0]}`);
