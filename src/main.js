@@ -402,7 +402,8 @@ function describeCoverage() {
   const pending = pendingPhases();
   const totals = `${state.data.meetings.length.toLocaleString('pt-BR')} reuniões e ${state.data.tasks.length.toLocaleString('pt-BR')} tarefas em cache.`;
   if (!pending.length) return `Sincronização concluída: ${totals}`;
-  return `Carregando ${pending[0].label} em segundo plano — o comparativo com o ano anterior fica disponível ao terminar. ${totals}`;
+  const restam = `${pending.length} ${pending.length === 1 ? 'mês' : 'meses'}`;
+  return `Carregando ${pending[0].label} em segundo plano, faltam ${restam} — o comparativo com o ano anterior fica disponível ao terminar. ${totals}`;
 }
 
 /** Reaplica a classificação vinda de `customers` a todos os registros em cache. */

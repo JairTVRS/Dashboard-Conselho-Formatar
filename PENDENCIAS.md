@@ -22,10 +22,12 @@ sem falha.
 
 ### Implementado
 
-**3. Carga em três fases encadeadas** — últimos 6 meses, restante do ano corrente,
-ano anterior. Fases vazias são descartadas, o que resolve o começo do ano sem regra
-especial. Verificado contra a API: a fase 1 fechou em 4,3 min, atravessando 4 janelas
-de limite, e trouxe exatamente abr–set/2026, nada fora do intervalo.
+**3. Carga mês a mês, do mais recente para o mais antigo** (v1.5.1). A primeira
+tentativa fatiava em três blocos — 6 meses, resto do ano, ano anterior — e não
+resolvia o primeiro acesso: como a tela só libera quando o bloco fecha em reuniões
+*e* tarefas, o bloco de 6 meses deixava a tela vazia por 4,3 minutos mesmo com 5.455
+reuniões já gravadas. Com a fatia de um mês, o mês corrente aparece em 17s (medido) e
+a linha do tempo cresce para trás sozinha. Sem caso especial de virada de ano.
 
 **4. Cobertura persistida**, que só avança quando a fase fecha em todos os recursos —
 senão a tela mostraria reuniões cheias e zero tarefas no intervalo entre uma e outra.

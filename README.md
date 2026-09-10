@@ -40,17 +40,15 @@ primeira carga não custe tudo o que já foi baixado.
 
 ### Carga em fases
 
-Como a janela inteira leva uns 16 minutos, a primeira carga é fatiada da mais
-recente para a mais antiga, e cada fase encadeia a seguinte em segundo plano:
+Como a janela inteira leva uns 16 minutos, a carga é fatiada **mês a mês, do mais
+recente para o mais antigo**, e cada mês encadeia o seguinte em segundo plano. O mês
+corrente fica visível em torno de 20 segundos e a linha do tempo cresce para trás
+enquanto a pessoa já analisa.
 
-| Fase | Período | Pronto em |
-|---|---|---|
-| 1 | últimos 6 meses | ~4,5 min |
-| 2 | restante do ano corrente | ~6,5 min |
-| 3 | ano anterior | ~16 min |
-
-Fases vazias são descartadas, e é isso que faz o começo do ano funcionar sem regra
-especial: em janeiro os "últimos 6 meses" já invadem o ano anterior e a fase 2 some.
+Fatiar em blocos grandes não resolvia o primeiro acesso: a tela só libera quando o
+bloco fecha em reuniões *e* tarefas, então um bloco de 6 meses deixava a tela vazia
+por 4 minutos mesmo com milhares de reuniões já em cache. Com a fatia de um mês não
+existe caso especial de virada de ano.
 
 O que a tela exibe é decidido pela **cobertura**, gravada junto do cache: ela só
 avança quando a fase fecha em *todos* os recursos. Sem isso a tela mostraria
@@ -159,4 +157,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.5.0`.
+A versão atual do projeto é `1.5.1`.

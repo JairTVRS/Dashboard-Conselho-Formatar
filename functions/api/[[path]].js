@@ -9,9 +9,17 @@ function problem(status, type, message) {
   });
 }
 
-/** A secret key é guardada crua no ambiente; o prefixo `Bearer` é montado aqui. */
+/**
+ * A secret key é guardada crua no ambiente; o prefixo `Bearer` é montado aqui.
+ * Aspas em volta do valor são removidas: coladas por engano, elas viram parte da
+ * chave e a API responde 401, indistinguível de uma chave inativa.
+ */
 function secretKey(env) {
-  return String(env?.HUB_API_SECRET_KEY || '').replace(/^Bearer\s+/i, '').trim();
+  return String(env?.HUB_API_SECRET_KEY || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/^Bearer\s+/i, '')
+    .trim();
 }
 
 export async function onRequest({ request, env, params }) {

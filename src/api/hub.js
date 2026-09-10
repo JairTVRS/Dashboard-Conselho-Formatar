@@ -1,4 +1,4 @@
-import { monthKey } from '../lib/dates.js';
+import { monthKey, monthLabel } from '../lib/dates.js';
 
 const API_ROOT = '/api/v1';
 
@@ -58,35 +58,30 @@ export function syncWindow(reference = new Date()) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-const PHASE_LABELS = ['últimos 6 meses', 'restante do ano corrente', 'ano anterior'];
-
 /**
- * A carga inicial é fatiada da mais recente para a mais antiga: a API deixa passar
- * 50 requisições por minuto e a janela inteira leva uns 16 minutos, então o
- * dashboard fica utilizável muito antes de tudo chegar.
+ * A carga inicial é fatiada **mês a mês, do mais recente para o mais antigo**.
  *
- * Fases vazias são descartadas, e é isso que faz o começo do ano funcionar sem
- * regra especial: em janeiro os "últimos 6 meses" já invadem o ano anterior, o
- * restante do ano corrente fica vazio e some sozinho.
+ * A API deixa passar 50 requisições por minuto e a janela inteira leva uns 16
+ * minutos. Fatiar em blocos grandes não resolvia o primeiro acesso: a tela só
+ * libera quando o bloco fecha em reuniões *e* tarefas, então um bloco de 6 meses
+ * deixava a tela vazia por 4 minutos mesmo com milhares de reuniões já em cache.
+ *
+ * Um mês são umas 33 páginas, uns 40 segundos: o mês corrente aparece quase
+ * imediatamente e a linha do tempo cresce para trás enquanto a pessoa já analisa.
+ * Como a fatia é sempre um mês, não há caso especial de virada de ano.
  */
 export function syncPhases(reference = new Date()) {
   const period = syncWindow(reference);
   const windowStart = new Date(period.start);
-  const clamp = (date) => (date < windowStart ? windowStart : date);
-
-  const starts = [
-    clamp(new Date(reference.getFullYear(), reference.getMonth() - 5, 1)),
-    clamp(new Date(reference.getFullYear(), 0, 1)),
-    windowStart
-  ];
 
   const phases = [];
   let end = new Date(period.end);
-  starts.forEach((start, index) => {
-    if (start > end) return;
-    phases.push({ label: PHASE_LABELS[index], start: start.toISOString(), end: end.toISOString() });
+  while (end > windowStart) {
+    const monthStart = new Date(end.getFullYear(), end.getMonth(), 1, 0, 0, 0, 0);
+    const start = monthStart < windowStart ? windowStart : monthStart;
+    phases.push({ label: monthLabel(monthKey(start)), start: start.toISOString(), end: end.toISOString() });
     end = new Date(start.getTime() - 1);
-  });
+  }
   return phases;
 }
 
