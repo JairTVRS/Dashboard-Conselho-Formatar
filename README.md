@@ -89,6 +89,15 @@ Coloque os arquivos oficiais em `public/`:
 - `logo-branca.png` — tema escuro
 - `logo-preta.png` — tema claro
 
+## Ícone da aba
+
+`public/Icone-Aba.png` é a arte de origem. Dela saem, já quadrados e centrados,
+`favicon.ico` (16/32/48), `favicon-512.png`, `favicon-dark-512.png` e
+`apple-touch-icon.png`, ligados em `index.html`. Como o logo é um traço preto sobre
+fundo transparente, a variante branca é servida por `prefers-color-scheme: dark` —
+sem ela o ícone desaparece na barra de abas de quem usa o navegador em tema escuro.
+Ao trocar a arte, regere os quatro arquivos a partir do novo `Icone-Aba.png`.
+
 ## Supabase
 
 1. Crie um projeto no Supabase.
@@ -107,4 +116,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.4.3`.
+A versão atual do projeto é `1.4.4`.

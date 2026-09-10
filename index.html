@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f3f3f3" />
     <title>Indicadores Operacionais</title>
+
+    <!-- Gerados a partir de public/Icone-Aba.png, recortado e centrado num quadrado.
+         O .ico (16/32/48) e o fallback; o logo e um traco preto, entao o navegador
+         em tema escuro recebe a variante branca, senao o icone some na barra de abas. -->
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" type="image/png" href="/favicon-512.png" sizes="512x512" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/png" href="/favicon-dark-512.png" sizes="512x512" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <script>
       // Aplica o tema antes da primeira pintura para evitar flash de cor.
       (function () {
