@@ -95,8 +95,8 @@ estava fora da janela e hoje está dentro — e o incremental não a traz, porqu
 janela completa". Correção provável: a cada sincronização, recarregar sem filtro de
 `updatedAt` uma faixa curta recente (uns 30 dias).
 
-**Três das quatro áreas são placeholders.** RH, Comercial e Financeiro aparecem no
-menu com "Fonte de dados ainda não configurada". Só Operações tem dados.
+**Duas das quatro áreas são placeholders.** RH e Financeiro aparecem no menu com
+"Fonte de dados ainda não configurada". Operações e Comercial têm dados.
 
 **Pagamentos continuam entrando à mão.** A API não expõe pagamentos, então a aba de
 Custo depende de subir `Pagamentos.csv` a cada atualização.

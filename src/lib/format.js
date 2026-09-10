@@ -17,3 +17,10 @@ export function formatPercent(value) {
 export function formatDecimal(value) {
   return formatNumber(value, 1);
 }
+
+/** Duração no formato do relatório comercial: 261:33 são 261 horas e 33 minutos. */
+export function formatClock(hours) {
+  const value = Number(hours) || 0;
+  const minutes = Math.round(Math.abs(value) * 60);
+  return `${value < 0 ? '-' : ''}${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+}

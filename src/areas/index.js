@@ -1,4 +1,5 @@
 import { operacoes } from './operacoes.js';
+import { comercial } from './comercial.js';
 
 const ICONS = {
   comercial: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5h18l-7 8.2v6.4l-4 2.4v-8.8Z"/></svg>',
@@ -36,12 +37,7 @@ export const areas = [
     subtitle: 'Linha do tempo mensal de quadro, movimentação, absenteísmo e custo de pessoal.'
   }),
   operacoes,
-  pending({
-    id: 'comercial',
-    label: 'Comercial',
-    title: 'Indicadores Comerciais',
-    subtitle: 'Linha do tempo mensal de leads, conversões, CAC, LTV e performance de vendas.'
-  }),
+  comercial,
   pending({
     id: 'financeiro',
     label: 'Financeiro',

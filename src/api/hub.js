@@ -10,9 +10,24 @@ const RETRY_LIMIT = 6;
 const RATE_RESERVE = 2;
 const RATE_FALLBACK_WAIT = 60;
 
-const MEETING_FIELDS = 'id,nid,status,customer,participants,startDate,durationInMinutes,updatedAt';
-const TASK_FIELDS = 'id,nid,status,customer,responsible,dueDate,durationInMinutes,updatedAt';
-const CUSTOMER_FIELDS = 'id,classification';
+const MEETING_FIELDS = 'id,nid,status,customer,participants,meetingType,startDate,durationInMinutes,updatedAt';
+const TASK_FIELDS = 'id,nid,status,customer,responsible,team,dueDate,durationInMinutes,updatedAt';
+const CUSTOMER_FIELDS = 'id,nid,companyName,classification';
+
+/**
+ * Coleções pequenas e estáveis que dão nome e vínculo ao que as atividades guardam
+ * como id. Somam menos de 100 registros: cabem em quatro páginas.
+ *
+ * O time não vive na atividade em si — vem do cadastro. A tarefa já traz `team`
+ * pronto (conferido: bate com o time da demanda em 100 de 100), e a reunião chega
+ * lá pelo tipo, que pode pertencer a mais de um time.
+ */
+const REFERENCE_SOURCES = [
+  { resource: 'teams', fields: 'id,title' },
+  { resource: 'user-groups', fields: 'id,title' },
+  { resource: 'users', fields: 'id,name,userGroup' },
+  { resource: 'meeting-types', fields: 'id,title,teams' }
+];
 
 const MEETING_STATUS = {
   unscheduled: 'Previsto',
@@ -194,11 +209,13 @@ function participantIds(participants) {
   }).filter(Boolean))];
 }
 
-function activityRecord({ id, status, nid, customer, month, minutes, people, classification }) {
+function activityRecord({ id, status, nid, customer, month, minutes, people, classification, meetingType = '', team = '' }) {
   return {
     id,
     status,
     nid,
+    meetingType,
+    team,
     client: customer,
     month,
     minutes,
@@ -223,6 +240,7 @@ export function normalizeMeeting(row, classificationOf) {
     month: monthKey(row.startDate),
     minutes: Number(row.durationInMinutes) || 0,
     people,
+    meetingType: identifier(row.meetingType),
     classification: classificationOf(customer)
   });
 }
@@ -238,6 +256,7 @@ export function normalizeTask(row, classificationOf) {
     month: monthKey(row.dueDate),
     minutes: Number(row.durationInMinutes) || 0,
     people: responsible ? [responsible] : [],
+    team: identifier(row.team),
     classification: classificationOf(customer)
   });
 }
@@ -247,8 +266,11 @@ export async function testConnection() {
   return true;
 }
 
-/** `customers` traz a classificação, reaplicada a reuniões e tarefas em cada carga. */
-export async function fetchClassifications({ onProgress } = {}) {
+/**
+ * `customers` traz classificação, nome e nid. O nid é o que permite casar os
+ * pagamentos importados à mão com o cliente sem depender de bater o texto do nome.
+ */
+export async function fetchCustomers({ onProgress } = {}) {
   const onWait = (seconds) => onProgress?.({ stage: 'customers', waitingSeconds: seconds });
   const rows = await fetchAll(
     'customers',
@@ -258,11 +280,46 @@ export async function fetchClassifications({ onProgress } = {}) {
   );
 
   const classifications = {};
+  const customers = {};
   rows.forEach((row) => {
     const id = identifier(row);
-    if (id) classifications[id] = row.classification == null ? '' : String(row.classification).trim();
+    if (!id) return;
+    classifications[id] = row.classification == null ? '' : String(row.classification).trim();
+    customers[id] = { nid: row.nid == null ? '' : String(row.nid), name: String(row.companyName || '').trim() };
   });
-  return classifications;
+  return { classifications, customers };
+}
+
+/** Times, grupos de usuário, usuários e tipos de reunião: o de-para dos ids. */
+export async function fetchReference({ onProgress } = {}) {
+  const reference = { teams: {}, userGroups: {}, userGroupOf: {}, userNames: {}, meetingTypeTeams: {} };
+
+  for (const source of REFERENCE_SOURCES) {
+    const onWait = (seconds) => onProgress?.({ stage: source.resource, waitingSeconds: seconds });
+    const rows = await fetchAll(
+      source.resource,
+      { fields: source.fields },
+      (loaded, total) => onProgress?.({ stage: source.resource, loaded, total }),
+      onWait
+    );
+
+    rows.forEach((row) => {
+      const id = identifier(row);
+      if (!id) return;
+      if (source.resource === 'teams') reference.teams[id] = String(row.title || '').trim();
+      if (source.resource === 'user-groups') reference.userGroups[id] = String(row.title || '').trim();
+      if (source.resource === 'users') {
+        reference.userNames[id] = String(row.name || '').trim();
+        const group = identifier(row.userGroup);
+        if (group) reference.userGroupOf[id] = group;
+      }
+      if (source.resource === 'meeting-types') {
+        reference.meetingTypeTeams[id] = (Array.isArray(row.teams) ? row.teams : []).map(identifier).filter(Boolean);
+      }
+    });
+  }
+
+  return reference;
 }
 
 /**

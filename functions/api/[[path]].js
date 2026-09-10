@@ -1,5 +1,5 @@
 const UPSTREAM = 'https://hub.formatar.com.br/v1';
-const ALLOWED_RESOURCES = new Set(['meetings', 'tasks', 'customers']);
+const ALLOWED_RESOURCES = new Set(['meetings', 'tasks', 'customers', 'teams', 'users', 'user-groups', 'meeting-types']);
 const RATE_LIMIT_HEADERS = ['ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset', 'ratelimit-policy', 'retry-after'];
 
 function problem(status, type, message) {

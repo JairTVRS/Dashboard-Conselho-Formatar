@@ -20,7 +20,7 @@ injetando o header `Authorization: Bearer <secret key>` no servidor. A chave nun
 |---|---|
 | Upstream | `https://hub.formatar.com.br/v1` |
 | Autenticação | header `Authorization: Bearer <secret key>` |
-| Endpoints usados | `GET /meetings`, `GET /tasks`, `GET /customers` |
+| Endpoints usados | `GET /meetings`, `GET /tasks`, `GET /customers`, `GET /teams`, `GET /users`, `GET /user-groups`, `GET /meeting-types` |
 | Limite de requisições | **50 por minuto** (`RateLimit-Policy: 50;w=60`) |
 | Tamanho da página | 100 linhas, fixo — a API ignora `limit`, `perPage` e afins |
 | Janela sincronizada | 1º de janeiro do ano anterior até hoje (móvel) |
@@ -127,6 +127,36 @@ a conexão não está configurada.
 `functions/api/[[path]].js` é a Pages Function que faz o proxy: aceita apenas `GET`
 e apenas os recursos `meetings`, `tasks` e `customers`.
 
+## Área Comercial
+
+Matriz de cliente por mês, alimentada pelas atividades **finalizadas**, com quatro
+visões em abas: tempo de duração (em `HH:MM`), quantidade de participantes,
+recebimento e recebimento por hora. As colunas de período somam, exceto recebimento
+por hora, que é a **razão dos totais** — somar razões mensais daria um número sem
+sentido.
+
+### De onde vem cada vínculo
+
+| Filtro | Caminho |
+|---|---|
+| Classificação | `customers.classification` |
+| Time | `tasks.team` direto; a reunião chega pelo `meetingType`, e um tipo pode pertencer a mais de um time |
+| Grupo de Usuário | responsável e participantes → `users.userGroup` |
+
+Ao filtrar, a **duração conta inteira** — não se reparte uma reunião de uma hora
+entre times. Já a contagem de participantes respeita o filtro: com um grupo ativo,
+uma reunião de três pessoas soma só quem pertence a ele.
+
+### Recebimento
+
+Vem do `Pagamentos.csv` importado à mão, e só do que está marcado como pago. Cada
+pagamento é ligado ao cliente **primeiro pelo nid**, que é exato, e o que sobrar
+tenta pelo nome normalizado contra `companyName`. O que não casar aparece no detalhe
+da área, com o valor que ficou de fora — nada é descartado em silêncio.
+
+Como o arquivo do financeiro não tem time nem grupo de usuário, esses dois filtros
+ficam desabilitados nas abas de recebimento: repartir R$ por time seria inventar.
+
 ## Logos
 
 Coloque os arquivos oficiais em `public/`:
@@ -161,4 +191,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.5.3`.
+A versão atual do projeto é `1.6.0`.

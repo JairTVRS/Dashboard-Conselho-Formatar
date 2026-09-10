@@ -4,7 +4,7 @@ import { monthKey, monthLabel, dateTimeLabel } from './lib/dates.js';
 import { formatNumber } from './lib/format.js';
 import { tableMarkup } from './ui/table.js';
 import { areas, areaById, areaByPath } from './areas/index.js';
-import { syncPhases, recentWindow, syncWindow, fetchClassifications, syncRange, testConnection, HubError } from './api/hub.js';
+import { syncPhases, recentWindow, syncWindow, fetchCustomers, fetchReference, syncRange, testConnection, HubError } from './api/hub.js';
 import { initTheme } from './theme.js';
 
 const STORAGE_KEY = 'formatar-dashboard-operational-data-v1';
@@ -15,11 +15,11 @@ const DATABASE_STORE = 'dashboard-state';
 const COLLAPSE_BREAKPOINT = 1100;
 
 const state = {
-  data: { meetings: [], tasks: [], payments: [], classifications: {} },
+  data: { meetings: [], tasks: [], payments: [], classifications: {}, customers: {}, reference: {} },
   fileMeta: { payments: { name: '', latest: '', loaded: false } },
   // `coverage` é a faixa de competência realmente carregada de ponta a ponta.
   // Só ela decide o que a tela exibe; linhas fora dela ficam no cache esperando.
-  sync: { lastSync: '', running: false, error: '', message: '', coverage: null, phase: null, waitUntil: 0, waitStage: '' },
+  sync: { lastSync: '', running: false, error: '', message: '', coverage: null, phase: null, waitUntil: 0, waitStage: '', fieldsVersion: 0 },
   excludedDates: new Set(),
   month: 'all',
   area: 'operacoes',
@@ -292,7 +292,18 @@ function mergeActivities(kind, incoming) {
 
 /* Sincronização ------------------------------------------------------------ */
 
-const STAGE_LABELS = { customers: 'clientes', meetings: 'reuniões', tasks: 'tarefas' };
+const STAGE_LABELS = {
+  customers: 'clientes', meetings: 'reuniões', tasks: 'tarefas',
+  teams: 'times', users: 'usuários', 'user-groups': 'grupos', 'meeting-types': 'tipos de reunião'
+};
+
+/**
+ * Sobe quando a sincronização passa a guardar um campo novo nas atividades. As
+ * linhas em cache não têm esse campo, então uma passada refaz a janela — mas sem
+ * mexer na cobertura, porque as linhas são substituídas pelo `id` e a tela pode
+ * continuar cheia enquanto o campo novo chega por trás.
+ */
+const DATA_FIELDS_VERSION = 2;
 
 /**
  * A API informa o tempo de bloqueio uma única vez, quando recusa a chamada. Guardar
@@ -352,14 +363,22 @@ async function commitRows(patch) {
  * Busca a classificação dos clientes e reaplica ao que já está em cache. Roda depois
  * do primeiro mês, para não segurar a primeira competência na tela.
  */
-async function refreshClassifications(onProgress) {
-  const classifications = await fetchClassifications({ onProgress });
+async function refreshCustomers(onProgress) {
+  const { classifications, customers } = await fetchCustomers({ onProgress });
   state.data.classifications = classifications;
+  state.data.customers = customers;
   state.data.meetings = applyClassifications(state.data.meetings);
   state.data.tasks = applyClassifications(state.data.tasks);
   await persistState();
   render();
   return classifications;
+}
+
+/** Times, grupos e tipos de reunião: menos de 100 registros, quatro páginas. */
+async function refreshReference(onProgress) {
+  state.data.reference = await fetchReference({ onProgress });
+  await persistState();
+  render();
 }
 
 /** Estende a cobertura para trás; as fases vêm da mais recente para a mais antiga. */
@@ -436,10 +455,11 @@ async function runSync({ incremental }) {
         state.sync.lastSync = new Date().toISOString();
         await persistState();
         render();
-        if (index === 0) await refreshClassifications(onProgress);
+        if (index === 0) { await refreshCustomers(onProgress); await refreshReference(onProgress); }
       }
     } else {
-      const classifications = await refreshClassifications(onProgress);
+      const classifications = await refreshCustomers(onProgress);
+      await refreshReference(onProgress);
       // Período já coberto: puxa o que mudou. A faixa recente vai sem filtro de
       // `updatedAt` porque um registro pode entrar na janela só pelo tempo passar —
       // uma tarefa que vence hoje, criada e não tocada há semanas, o filtro perderia.
@@ -451,9 +471,11 @@ async function runSync({ incremental }) {
       }
       extendCoverage({ start: recent.start, end: syncWindow().end });
       state.sync.lastSync = new Date().toISOString();
+      await upgradeFields(onProgress);
     }
 
     state.sync.phase = null;
+    state.sync.fieldsVersion = DATA_FIELDS_VERSION;
     state.sync.message = describeCoverage();
     await persistState();
     render();
@@ -469,6 +491,24 @@ async function runSync({ incremental }) {
     renderSyncStatus();
     renderDataStatus();
   }
+}
+
+/**
+ * Refaz a janela já coberta para as linhas antigas ganharem os campos novos
+ * (`meetingType` na reunião, `team` na tarefa), sem tocar na cobertura: como a
+ * chave é o `id`, cada linha é substituída pela versão completa e a tela continua
+ * cheia o tempo todo.
+ */
+async function upgradeFields(onProgress) {
+  if (state.sync.fieldsVersion >= DATA_FIELDS_VERSION || !state.sync.coverage) return;
+  const phases = syncPhases();
+  for (let index = 0; index < phases.length; index += 1) {
+    const phase = phases[index];
+    state.sync.phase = { label: phase.label, background: true, position: index + 1, total: phases.length };
+    renderSyncStatus();
+    await syncRange({ ...phase, classifications: state.data.classifications, onProgress, onStageDone: commitRows });
+  }
+  render();
 }
 
 /** Mensagem de fim: diz o que já dá para analisar e o que ainda falta. */
@@ -500,9 +540,9 @@ async function runConnectionTest() {
 }
 
 async function clearCache() {
-  state.data = { meetings: [], tasks: [], payments: [], classifications: {} };
+  state.data = { meetings: [], tasks: [], payments: [], classifications: {}, customers: {}, reference: {} };
   state.fileMeta.payments = { name: '', latest: '', loaded: false };
-  state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.', coverage: null, phase: null, waitUntil: 0, waitStage: '' };
+  state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.', coverage: null, phase: null, waitUntil: 0, waitStage: '', fieldsVersion: 0 };
   await persistState();
   render();
 }
@@ -526,8 +566,11 @@ function serializableState() {
     classifications: state.data.classifications,
     fileMeta: state.fileMeta,
     excludedDates: [...state.excludedDates],
+    customers: state.data.customers,
+    reference: state.data.reference,
     lastSync: state.sync.lastSync,
-    coverage: state.sync.coverage
+    coverage: state.sync.coverage,
+    fieldsVersion: state.sync.fieldsVersion
   };
 }
 
@@ -558,10 +601,13 @@ async function restoreState() {
     state.data.tasks = source.tasks || [];
     state.data.payments = source.payments || [];
     state.data.classifications = source.classifications || {};
+    state.data.customers = source.customers || {};
+    state.data.reference = source.reference || {};
     state.fileMeta = { ...state.fileMeta, ...(source.fileMeta || {}) };
     state.excludedDates = new Set(source.excludedDates || []);
     state.sync.lastSync = source.lastSync || '';
     state.sync.coverage = source.coverage || null;
+    state.sync.fieldsVersion = Number(source.fieldsVersion) || 0;
 
     // Cache anterior à integração: as atividades vinham de planilha e não têm `id`.
     // A chave delas é o `nid`, e a das linhas da API é o `id`, então as mesmas
@@ -609,6 +655,8 @@ function context() {
     data: state.data,
     month: state.month,
     excludedDates: state.excludedDates,
+    tab: activeTabs[state.area],
+    fieldsReady: state.sync.fieldsVersion >= DATA_FIELDS_VERSION,
     filters: state.areaFilters[state.area] || {}
   };
 }
@@ -725,7 +773,7 @@ function renderIndicatorPanel(area, months) {
   const visible = state.month === 'all' ? months : months.filter((month) => month === state.month);
   $('#timeline-range').textContent = `${monthLabel(visible[0])} até ${monthLabel(visible[visible.length - 1])}`;
   table.className = 'indicator-table-wrap';
-  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible);
+  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader);
   requestAnimationFrame(() => { table.scrollLeft = table.scrollWidth; });
 }
 
@@ -770,7 +818,7 @@ function renderSyncStatus() {
   // O progresso chega a cada página; a tela vazia acompanha sem esperar o `render()`,
   // que só roda quando o mês fecha.
   const table = $('#indicator-table');
-  if (state.sync.running && table?.classList.contains('empty-state')) table.textContent = syncingMessage();
+  if (state.sync.running && !currentArea().pending && table?.classList.contains('empty-state')) table.textContent = syncingMessage();
 }
 
 function renderUploadStatus() {

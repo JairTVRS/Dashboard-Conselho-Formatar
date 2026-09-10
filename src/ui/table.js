@@ -61,12 +61,12 @@ export function variationClass(variation) {
  * comparação está oculta, as colunas de mês assumem a posição das que sumiram e
  * herdariam o cinza do acumulado e o laranja da variação.
  */
-export function tableMarkup(rows, visibleMonths) {
+export function tableMarkup(rows, visibleMonths, labelHeader = 'Indicador') {
   const comparison = comparisonPeriod(visibleMonths);
   const previousHead = comparison.comparable ? `<th class="col-previous">${comparison.previousLabel}</th>` : '';
   const variationHead = comparison.comparable ? '<th class="col-variation">Variação</th>' : '';
   const monthHeads = visibleMonths.map((month) => `<th class="col-month">${monthLabel(month)}</th>`).join('');
-  const head = `<thead><tr><th class="col-label">Indicador</th>${previousHead}<th class="col-current">${comparison.currentLabel}</th>${variationHead}${monthHeads}</tr></thead>`;
+  const head = `<thead><tr><th class="col-label">${labelHeader}</th>${previousHead}<th class="col-current">${comparison.currentLabel}</th>${variationHead}${monthHeads}</tr></thead>`;
 
   const body = rows.map((row) => {
     const current = accumulated(row, comparison.currentMonths, comparison.endMonth);
