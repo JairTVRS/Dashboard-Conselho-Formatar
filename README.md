@@ -52,9 +52,19 @@ As horas apontadas usam `durationInMinutes`. A classificação do cliente vem de
 
 ## Build Cloudflare Pages
 
-- Build command: `npm run build`
-- Output directory: `dist`
-- Framework preset: `Vite`
+Toda a configuração de publicação vive no painel do Cloudflare, em
+**Configurações → Build**:
+
+| Campo | Valor |
+|---|---|
+| Comando da build | `npm run build` |
+| Diretório de saída da build | `dist` |
+| Predefinição da estrutura | Nenhum |
+
+> O projeto **não** deve ter um `wrangler.toml`. Quando esse arquivo existe, o
+> Cloudflare passa a tratá-lo como fonte de verdade e **ignora as variáveis e
+> segredos do painel** — o que impede a Function de ler `HUB_API_SECRET_KEY`,
+> já que uma secret jamais pode ser versionada no repositório.
 
 ### Variável obrigatória
 
@@ -97,4 +107,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.3.0`.
+A versão atual do projeto é `1.3.1`.
