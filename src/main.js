@@ -40,7 +40,7 @@ app.innerHTML = `
       <div class="hero-brand">
         <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="964" height="267" />
         <div>
-          <p class="eyebrow">CONSELHO FORMATAR / GESTÃO</p>
+          <p class="eyebrow">CONSELHO FORMATAR / GESTÃO <span class="version-tag" title="Versão publicada">v${__APP_VERSION__}</span></p>
           <h1>Indicadores Operacionais</h1>
           <p class="hero-copy">Linha do tempo mensal de reuniões, tarefas, capacidade, qualidade e custos pagos.</p>
         </div>

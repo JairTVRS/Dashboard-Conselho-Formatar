@@ -97,4 +97,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.2.0`.
+A versão atual do projeto é `1.3.0`.
