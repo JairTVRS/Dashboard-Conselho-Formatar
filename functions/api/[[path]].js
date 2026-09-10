@@ -58,6 +58,21 @@ export async function onRequest({ request, env, params }) {
     headers: { 'x-secret-key': key, accept: 'application/json' }
   });
 
+  // Quando a API recusa a chave, o formato dela ajuda a separar erro de digitação
+  // (colagem truncada, quebra de linha no meio) de chave realmente inativa.
+  // Reporta tamanho e forma — nunca o conteúdo.
+  if (upstream.status === 401 || upstream.status === 403) {
+    const body = await upstream.json().catch(() => null);
+    return problem(upstream.status, body?.type || 'API_KEY_REJECTED', body?.message || 'A API recusou a secret key.', {
+      chave_enviada: {
+        caracteres: key.length,
+        tem_espaco_interno: /\s/.test(key),
+        primeiros_3: key.slice(0, 3),
+        formato: /^[\w-]+$/.test(key) ? 'apenas letras, numeros, _ e -' : 'contem outros caracteres'
+      }
+    });
+  }
+
   const headers = new Headers();
   headers.set('content-type', upstream.headers.get('content-type') || 'application/json; charset=utf-8');
   headers.set('cache-control', 'no-store');
