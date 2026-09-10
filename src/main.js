@@ -1,75 +1,77 @@
 import * as XLSX from 'xlsx';
 import './style.css';
-import { monthKey, monthLabel, shortMonth, dateTimeLabel } from './lib/dates.js';
+import { monthKey, monthLabel, dateTimeLabel } from './lib/dates.js';
+import { formatNumber } from './lib/format.js';
+import { tableMarkup } from './ui/table.js';
+import { areas, areaById, areaByPath } from './areas/index.js';
 import { syncAll, syncWindow, testConnection, HubError } from './api/hub.js';
 import { initTheme } from './theme.js';
 
 const STORAGE_KEY = 'formatar-dashboard-operational-data-v1';
+const SHELL_KEY = 'formatar-dashboard-shell-v1';
 const DATABASE_NAME = 'formatar-dashboard-storage';
 const DATABASE_VERSION = 1;
 const DATABASE_STORE = 'dashboard-state';
+const COLLAPSE_BREAKPOINT = 1100;
 
 const state = {
-  meetings: [],
-  tasks: [],
-  payments: [],
-  classifications: {},
-  fileMeta: {
-    payments: { name: '', latest: '', loaded: false }
-  },
+  data: { meetings: [], tasks: [], payments: [], classifications: {} },
+  fileMeta: { payments: { name: '', latest: '', loaded: false } },
   sync: { lastSync: '', running: false, error: '', message: '' },
-  classification: 'all',
-  segment: 'all',
+  excludedDates: new Set(),
   month: 'all',
-  activeTab: 'volume',
-  excludedDates: new Set()
+  area: 'operacoes',
+  sidebarCollapsed: window.innerWidth < COLLAPSE_BREAKPOINT,
+  areaFilters: {}
 };
 
-const meetingStatuses = new Set(['Previsto', 'Agendado', 'Enviado', 'Iniciado', 'Finalizado']);
-const taskStatuses = new Set(['Previsto', 'Enviado', 'Pendente', 'Iniciado', 'Pausado', 'Finalizado']);
+areas.forEach((area) => { state.areaFilters[area.id] = { ...area.defaultFilters }; });
+const activeTabs = Object.fromEntries(areas.map((area) => [area.id, area.tabs[0]?.id || '']));
 
 const GEAR_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" fill="currentColor"/><path d="m19.4 13.5.1-1.5-.1-1.5 1.7-1.3a.8.8 0 0 0 .2-1l-1.6-2.8a.8.8 0 0 0-1-.3l-2 .8a7.6 7.6 0 0 0-2.6-1.5l-.3-2.1a.8.8 0 0 0-.8-.7h-3.2a.8.8 0 0 0-.8.7l-.3 2.1a7.6 7.6 0 0 0-2.6 1.5l-2-.8a.8.8 0 0 0-1 .3L2.7 8.2a.8.8 0 0 0 .2 1l1.7 1.3-.1 1.5.1 1.5-1.7 1.3a.8.8 0 0 0-.2 1l1.6 2.8a.8.8 0 0 0 1 .3l2-.8a7.6 7.6 0 0 0 2.6 1.5l.3 2.1a.8.8 0 0 0 .8.7h3.2a.8.8 0 0 0 .8-.7l.3-2.1a7.6 7.6 0 0 0 2.6-1.5l2 .8a.8.8 0 0 0 1-.3l1.6-2.8a.8.8 0 0 0-.2-1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>';
 const SUN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4 17 7M7 17l-1.6 1.6"/></svg>';
 const MOON_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.4A8.4 8.4 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4Z"/></svg>';
+const RAIL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16M4 12h16M4 17.5h10"/></svg>';
 
 const app = document.querySelector('#app');
 
 app.innerHTML = `
-  <main class="shell">
-    <header class="hero">
-      <div class="hero-brand">
-        <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="964" height="267" />
-        <div>
-          <p class="eyebrow">CONSELHO FORMATAR / GESTÃO <span class="version-tag" title="Versão publicada">v${__APP_VERSION__}</span></p>
-          <h1>Indicadores Operacionais</h1>
-          <p class="hero-copy">Linha do tempo mensal de reuniões, tarefas, capacidade, qualidade e custos pagos.</p>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar" aria-label="Áreas do dashboard">
+      <button id="sidebar-toggle" class="rail-toggle" type="button" aria-label="Recolher navegação">${RAIL_ICON}</button>
+      <ul class="rail">
+        ${areas.map((area) => `<li><a class="rail-item" data-area="${area.id}" href="${area.path}" title="${area.label}"><span class="rail-icon">${area.icon}</span><span class="rail-label">${area.label}</span></a></li>`).join('')}
+      </ul>
+      <div class="rail-footer">
+        <div class="rail-actions">
+          <button id="theme-toggle" class="rail-action" type="button" aria-label="Alternar tema">${SUN_ICON}${MOON_ICON}</button>
+          <button id="settings-toggle" class="rail-action" type="button" aria-label="Configurações de dados e integrações" title="Configurações de dados e integrações">${GEAR_ICON}</button>
         </div>
+        <span class="rail-version" title="Versão publicada">v${__APP_VERSION__}</span>
       </div>
-      <div class="hero-actions">
-        <div class="hero-badge"><span class="pulse"></span><span id="data-status">Aguardando dados</span></div>
-        <div class="action-buttons">
-          <button id="theme-toggle" class="icon-action" type="button" aria-label="Alternar tema">${SUN_ICON}${MOON_ICON}</button>
-          <button id="settings-toggle" class="icon-action" type="button" aria-label="Configurações de dados e integrações" title="Configurações de dados e integrações">${GEAR_ICON}</button>
-        </div>
-      </div>
-    </header>
-
-    <section class="filters">
-      <div class="filter-block"><label for="segment">Visão</label><select id="segment"><option value="all">Todas</option><option value="internal">Internos</option><option value="external">Externos</option></select></div>
-      <div class="filter-block"><label for="classification">Classificação do cliente</label><select id="classification"><option value="all">Todas as classificações</option></select></div>
-      <div class="filter-block"><label for="month">Competência</label><select id="month"><option value="all">Todos os meses</option></select></div>
-    </section>
-
-    <nav class="indicator-tabs" aria-label="Grupos de indicadores">
-      <button class="indicator-tab is-active" data-tab="volume" type="button">Volume</button>
-      <button class="indicator-tab" data-tab="productivity" type="button">Produtividade</button>
-      <button class="indicator-tab" data-tab="cost" type="button">Custo</button>
-      <button class="indicator-tab" data-tab="quality" type="button">Qualidade</button>
     </nav>
 
-    <section id="indicator-panel"></section>
-    <section class="detail-section"><details><summary>Detalhes de status cancelados e registros desconsiderados</summary><div id="status-details" class="detail-content">Nenhum dado carregado.</div></details></section>
-  </main>
+    <main class="shell">
+      <header class="hero">
+        <div class="hero-brand">
+          <img id="brand-logo" class="brand-logo" alt="Formatar — Gestão e Governança" width="964" height="267" />
+          <div>
+            <p class="eyebrow" id="area-eyebrow"></p>
+            <h1 id="area-title"></h1>
+            <p class="hero-copy" id="area-subtitle"></p>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <div class="hero-badge"><span class="pulse"></span><span id="data-status">Aguardando dados</span></div>
+        </div>
+      </header>
+
+      <section class="filters" id="filters"></section>
+      <nav class="indicator-tabs" id="indicator-tabs" aria-label="Grupos de indicadores"></nav>
+      <section id="indicator-panel"></section>
+      <section class="detail-section" id="detail-section" hidden><details><summary id="detail-summary"></summary><div id="status-details" class="detail-content"></div></details></section>
+    </main>
+  </div>
 
   <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
   <aside class="settings-drawer" id="settings-drawer" hidden>
@@ -121,7 +123,7 @@ app.innerHTML = `
       <p class="muted">As chamadas passam por uma função do Cloudflare Pages que injeta a secret key no servidor. A chave nunca é enviada ao navegador nem fica no código publicado.</p>
       <div class="api-note">
         <strong>Como configurar</strong>
-        <span>Em <em>Cloudflare Pages → Configurações → Variáveis e segredos</em>, crie um segredo chamado <code>HUB_API_SECRET_KEY</code> (o nome <code>Authorization</code> também é aceito) com o valor da secret key e faça um novo deploy.</span>
+        <span>Em <em>Cloudflare Pages → Configurações → Variáveis e segredos</em>, crie um segredo chamado <code>HUB_API_SECRET_KEY</code> com o valor da secret key e faça um novo deploy. Em desenvolvimento, use um arquivo <code>.env.local</code> com a mesma variável.</span>
       </div>
       <div class="sync-actions">
         <button id="test-connection" class="button" type="button">Testar conexão</button>
@@ -141,26 +143,51 @@ app.innerHTML = `
 const $ = (selector) => document.querySelector(selector);
 
 initTheme();
+restoreShell();
+
+/* Navegação --------------------------------------------------------------- */
+
+function currentArea() {
+  return areaById(state.area);
+}
+
+function navigate(areaId, { push = true } = {}) {
+  const area = areaById(areaId);
+  state.area = area.id;
+  if (push && window.location.pathname !== area.path) window.history.pushState({ area: area.id }, '', area.path);
+  persistShell();
+  render();
+}
+
+document.querySelectorAll('[data-area]').forEach((link) => link.addEventListener('click', (event) => {
+  event.preventDefault();
+  navigate(link.dataset.area);
+}));
+
+window.addEventListener('popstate', () => navigate(areaByPath(window.location.pathname).id, { push: false }));
+
+$('#sidebar-toggle').addEventListener('click', () => {
+  state.sidebarCollapsed = !state.sidebarCollapsed;
+  persistShell();
+  renderSidebar();
+});
+
+/* Ações do cabeçalho e do drawer ------------------------------------------ */
 
 $('#payment-file').addEventListener('change', async (event) => {
   const file = event.target.files?.[0];
   if (!file) return;
   try {
-    state.payments = mergeRows('payments', normalizePaymentRows(await readFile(file)));
-    const latest = [...new Set(state.payments.map((item) => item.month).filter(Boolean))].sort().at(-1) || '';
+    state.data.payments = mergePayments(normalizePaymentRows(await readFile(file)));
+    const latest = [...new Set(state.data.payments.map((item) => item.month).filter(Boolean))].sort().at(-1) || '';
     state.fileMeta.payments = { name: file.name, latest, loaded: true };
     persistState();
-    $('#upload-feedback').textContent = `${file.name} carregado: ${state.payments.length.toLocaleString('pt-BR')} registros válidos para análise.`;
+    $('#upload-feedback').textContent = `${file.name} carregado: ${state.data.payments.length.toLocaleString('pt-BR')} registros válidos para análise.`;
     render();
   } catch (error) {
     $('#upload-feedback').textContent = `Não foi possível ler ${file.name}: ${error.message}`;
   }
 });
-
-$('#segment').addEventListener('change', (event) => { state.segment = event.target.value; render(); });
-$('#classification').addEventListener('change', (event) => { state.classification = event.target.value; render(); });
-$('#month').addEventListener('change', (event) => { state.month = event.target.value; render(); });
-document.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => { state.activeTab = button.dataset.tab; render(); }));
 
 $('#settings-toggle').addEventListener('click', () => toggleDrawer(true));
 $('#close-settings').addEventListener('click', () => toggleDrawer(false));
@@ -191,6 +218,8 @@ function toggleDrawer(open) {
   $('#drawer-backdrop').hidden = !open;
   document.body.classList.toggle('drawer-open', open);
 }
+
+/* Importação de pagamentos ------------------------------------------------ */
 
 function readFile(file) {
   return file.arrayBuffer().then((buffer) => {
@@ -233,27 +262,38 @@ function normalizePaymentRows(rows) {
   }).filter((item) => item.month);
 }
 
-function recordKey(kind, item) {
-  if (kind === 'payments') return [item.nid, item.parcel, item.month, item.account, item.amount].join('|');
+function paymentKey(item) {
+  return [item.nid, item.parcel, item.month, item.account, item.amount].join('|');
+}
+
+function mergePayments(incoming) {
+  const merged = new Map(state.data.payments.map((item) => [paymentKey(item), item]));
+  incoming.forEach((item) => merged.set(paymentKey(item), item));
+  return [...merged.values()];
+}
+
+function activityKey(item) {
   return item.id || item.nid || [item.client, item.month, item.status, item.participant].join('|');
 }
 
-function mergeRows(kind, incoming) {
-  const merged = new Map(state[kind].map((item) => [recordKey(kind, item), item]));
-  incoming.forEach((item) => merged.set(recordKey(kind, item), item));
+function mergeActivities(kind, incoming) {
+  const merged = new Map(state.data[kind].map((item) => [activityKey(item), item]));
+  incoming.forEach((item) => merged.set(activityKey(item), item));
   return [...merged.values()];
 }
+
+/* Sincronização ------------------------------------------------------------ */
 
 async function runSync({ incremental }) {
   if (state.sync.running) return;
   state.sync.running = true;
   state.sync.error = '';
   renderSyncStatus();
+  renderDataStatus();
 
   const since = incremental ? state.sync.lastSync : '';
   const progress = $('#sync-progress');
   progress.hidden = false;
-
   const labels = { customers: 'clientes', meetings: 'reuniões', tasks: 'tarefas' };
 
   try {
@@ -267,9 +307,9 @@ async function runSync({ incremental }) {
       }
     });
 
-    state.classifications = result.classifications;
-    state.meetings = applyClassifications(mergeRows('meetings', result.meetings));
-    state.tasks = applyClassifications(mergeRows('tasks', result.tasks));
+    state.data.classifications = result.classifications;
+    state.data.meetings = applyClassifications(mergeActivities('meetings', result.meetings));
+    state.data.tasks = applyClassifications(mergeActivities('tasks', result.tasks));
     state.sync.lastSync = result.syncedAt;
     state.sync.message = `${result.incremental ? 'Sincronização incremental' : 'Recarga completa'} concluída: ${result.meetings.length.toLocaleString('pt-BR')} reuniões e ${result.tasks.length.toLocaleString('pt-BR')} tarefas recebidas.`;
     await persistState();
@@ -288,7 +328,7 @@ async function runSync({ incremental }) {
 
 /** Reaplica a classificação vinda de `customers` a todos os registros em cache. */
 function applyClassifications(items) {
-  return items.map((item) => ({ ...item, classification: state.classifications[item.client] ?? item.classification ?? '' }));
+  return items.map((item) => ({ ...item, classification: state.data.classifications[item.client] ?? item.classification ?? '' }));
 }
 
 async function runConnectionTest() {
@@ -306,15 +346,14 @@ async function runConnectionTest() {
 }
 
 async function clearCache() {
-  state.meetings = [];
-  state.tasks = [];
-  state.payments = [];
-  state.classifications = {};
+  state.data = { meetings: [], tasks: [], payments: [], classifications: {} };
   state.fileMeta.payments = { name: '', latest: '', loaded: false };
   state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.' };
   await persistState();
   render();
 }
+
+/* Persistência ------------------------------------------------------------- */
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -327,10 +366,10 @@ function openDatabase() {
 
 function serializableState() {
   return {
-    meetings: state.meetings,
-    tasks: state.tasks,
-    payments: state.payments,
-    classifications: state.classifications,
+    meetings: state.data.meetings,
+    tasks: state.data.tasks,
+    payments: state.data.payments,
+    classifications: state.data.classifications,
     fileMeta: state.fileMeta,
     excludedDates: [...state.excludedDates],
     lastSync: state.sync.lastSync
@@ -360,10 +399,10 @@ async function restoreState() {
     const legacy = saved ? null : JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     const source = saved || legacy;
     if (!source) return;
-    state.meetings = source.meetings || [];
-    state.tasks = source.tasks || [];
-    state.payments = source.payments || [];
-    state.classifications = source.classifications || {};
+    state.data.meetings = source.meetings || [];
+    state.data.tasks = source.tasks || [];
+    state.data.payments = source.payments || [];
+    state.data.classifications = source.classifications || {};
     state.fileMeta = { ...state.fileMeta, ...(source.fileMeta || {}) };
     state.excludedDates = new Set(source.excludedDates || []);
     state.sync.lastSync = source.lastSync || '';
@@ -372,54 +411,44 @@ async function restoreState() {
       localStorage.removeItem(STORAGE_KEY);
     }
   } catch {
-    state.meetings = [];
-    state.tasks = [];
-    state.payments = [];
+    state.data.meetings = [];
+    state.data.tasks = [];
+    state.data.payments = [];
   }
 }
 
-function dateIsExcluded(date) {
-  const day = date.getDay();
-  return day === 0 || day === 6 || state.excludedDates.has(date.toISOString().slice(0, 10));
-}
-
-function workingHours(month) {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const lastDay = new Date(year, monthNumber, 0).getDate();
-  let hours = 0;
-  for (let day = 1; day <= lastDay; day += 1) {
-    const date = new Date(year, monthNumber - 1, day);
-    if (!dateIsExcluded(date)) hours += date.getDay() === 5 ? 8 : 9;
+function persistShell() {
+  try {
+    localStorage.setItem(SHELL_KEY, JSON.stringify({ area: state.area, sidebarCollapsed: state.sidebarCollapsed }));
+  } catch {
+    // Preferência de navegação é conveniência local; o shell funciona sem ela.
   }
-  return hours;
 }
 
-function workingDays(month) {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const lastDay = new Date(year, monthNumber, 0).getDate();
-  let days = 0;
-  for (let day = 1; day <= lastDay; day += 1) if (!dateIsExcluded(new Date(year, monthNumber - 1, day))) days += 1;
-  return days;
+function restoreShell() {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(SHELL_KEY) || 'null');
+  } catch {
+    saved = null;
+  }
+  if (saved && typeof saved.sidebarCollapsed === 'boolean') state.sidebarCollapsed = saved.sidebarCollapsed;
+  state.area = areaByPath(window.location.pathname).id;
 }
 
-function unique(items, key) { return new Set(items.map((item) => item[key]).filter(Boolean)).size; }
+/* Renderização ------------------------------------------------------------- */
 
-/** Reuniões trazem vários participantes por registro, então a contagem percorre os arrays. */
-function uniquePeople(items) {
-  const people = new Set();
-  items.forEach((item) => {
-    const list = item.people?.length ? item.people : (item.participant ? [item.participant] : []);
-    list.forEach((person) => people.add(person));
-  });
-  return people.size;
+function context() {
+  return {
+    data: state.data,
+    month: state.month,
+    excludedDates: state.excludedDates,
+    filters: state.areaFilters[state.area] || {}
+  };
 }
-
-function formatNumber(number, digits = 0) { return Number(number || 0).toLocaleString('pt-BR', { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
-function formatCurrency(valueToFormat) { return Number(valueToFormat || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }); }
-function latestLabel(month) { return month ? `Dados mais recentes: ${monthLabel(month)}` : 'Sem competência válida'; }
 
 function availableMonths() {
-  const months = [...new Set([...state.meetings, ...state.tasks, ...state.payments].map((item) => item.month).filter(Boolean))].sort();
+  const months = [...new Set([...state.data.meetings, ...state.data.tasks, ...state.data.payments].map((item) => item.month).filter(Boolean))].sort();
   if (months.length < 2) return months;
   const result = [];
   const [startYear, startMonth] = months[0].split('-').map(Number);
@@ -430,50 +459,107 @@ function availableMonths() {
   return result;
 }
 
-function filteredData(kind) {
-  const source = state[kind].filter((item) => item.month && (kind !== 'payments' ? item.status === 'Finalizado' : item.paid));
-  return source.filter((item) => (kind === 'payments' || state.classification === 'all' || item.classification === state.classification) && (state.month === 'all' || item.month === state.month));
-}
-
-function distinctActivities(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const key = item.id || item.nid || `${item.client}-${item.month}-${item.status}-${item.participant}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-function metricsFor(month) {
-  const meetings = filteredData('meetings').filter((item) => item.month === month);
-  const tasks = filteredData('tasks').filter((item) => item.month === month);
-  const payments = filteredData('payments').filter((item) => item.month === month);
-  const selectedMeetings = state.segment === 'internal' ? [] : distinctActivities(meetings);
-  const selectedTasks = state.segment === 'external' ? [] : distinctActivities(tasks);
-  const activities = [...selectedMeetings, ...selectedTasks];
-  const capacity = workingHours(month);
-  const minutes = activities.reduce((sum, item) => sum + item.minutes, 0);
-  const costByPlan = payments.reduce((plans, item) => { const plan = item.account || 'Sem plano de contas'; plans[plan] = (plans[plan] || 0) + item.amount; return plans; }, {});
-  return { meetings: selectedMeetings, tasks: selectedTasks, payments, activities, capacity, minutes, clients: unique(activities, 'client'), people: uniquePeople(activities), cost: payments.reduce((sum, item) => sum + item.amount, 0), costByPlan };
-}
-
 function render() {
+  const area = currentArea();
   const months = availableMonths();
-  renderClassificationOptions();
 
-  const monthSelect = $('#month');
-  const selected = state.month;
-  monthSelect.innerHTML = `<option value="all">Todos os meses</option>${months.map((month) => `<option value="${month}">${monthLabel(month)}</option>`).join('')}`;
-  monthSelect.value = months.includes(selected) || selected === 'all' ? selected : 'all';
-  state.month = monthSelect.value;
+  renderSidebar();
+  $('#area-eyebrow').textContent = area.eyebrow;
+  $('#area-title').textContent = area.title;
+  $('#area-subtitle').textContent = area.subtitle;
+  document.title = `${area.title} · Formatar`;
 
-  renderIndicatorPanel(months);
-  renderDetails();
+  renderFilters(area, months);
+  renderTabs(area);
+  renderIndicatorPanel(area, months);
+  renderDetails(area);
   renderExcludedDates();
   renderUploadStatus();
   renderSyncStatus();
   renderDataStatus(months);
+}
+
+function renderSidebar() {
+  $('#sidebar').classList.toggle('is-collapsed', state.sidebarCollapsed);
+  $('#sidebar-toggle').setAttribute('aria-label', state.sidebarCollapsed ? 'Expandir navegação' : 'Recolher navegação');
+  document.querySelectorAll('[data-area]').forEach((link) => {
+    const active = link.dataset.area === state.area;
+    link.classList.toggle('is-active', active);
+    if (active) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+}
+
+function renderFilters(area, months) {
+  const container = $('#filters');
+  const areaFilters = area.filters(context());
+  const stored = state.areaFilters[area.id] || {};
+
+  const monthOptions = `<option value="all">Todos os meses</option>${months.map((month) => `<option value="${month}">${monthLabel(month)}</option>`).join('')}`;
+  const monthValue = months.includes(state.month) || state.month === 'all' ? state.month : 'all';
+  state.month = monthValue;
+
+  container.innerHTML = `
+    ${areaFilters.map((filter) => `<div class="filter-block"><label for="filter-${filter.id}">${filter.label}</label><select id="filter-${filter.id}" data-filter="${filter.id}"${filter.disabled ? ' disabled' : ''}>${filter.options.map((option) => `<option value="${option.value}">${option.label}</option>`).join('')}</select></div>`).join('')}
+    <div class="filter-block"><label for="month">Competência</label><select id="month">${monthOptions}</select></div>
+  `;
+
+  areaFilters.forEach((filter) => {
+    const select = container.querySelector(`[data-filter="${filter.id}"]`);
+    const values = filter.options.map((option) => String(option.value));
+    const current = values.includes(String(stored[filter.id])) ? stored[filter.id] : filter.options[0]?.value;
+    select.value = current;
+    stored[filter.id] = current;
+    select.addEventListener('change', (event) => {
+      state.areaFilters[area.id][filter.id] = event.target.value;
+      render();
+    });
+  });
+
+  const monthSelect = container.querySelector('#month');
+  monthSelect.value = monthValue;
+  monthSelect.addEventListener('change', (event) => { state.month = event.target.value; render(); });
+}
+
+function renderTabs(area) {
+  const nav = $('#indicator-tabs');
+  nav.hidden = area.tabs.length === 0;
+  nav.innerHTML = area.tabs.map((tab) => `<button class="indicator-tab${tab.id === activeTabs[area.id] ? ' is-active' : ''}" data-tab="${tab.id}" type="button">${tab.label}</button>`).join('');
+  nav.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => {
+    activeTabs[area.id] = button.dataset.tab;
+    render();
+  }));
+}
+
+function renderIndicatorPanel(area, months) {
+  const panel = $('#indicator-panel');
+  const tab = area.tabs.find((item) => item.id === activeTabs[area.id]);
+  const heading = tab ? `LINHA DO TEMPO / ${tab.label.toUpperCase()}` : area.eyebrow;
+  const title = tab ? tab.label : area.label;
+
+  panel.innerHTML = `<section class="table-section"><div class="section-heading"><div><p class="eyebrow">${heading}</p><h2>${title}</h2></div><span id="timeline-range" class="muted">Sem competência carregada</span></div><div id="indicator-table" class="indicator-table-wrap"></div></section>`;
+
+  const table = $('#indicator-table');
+  if (area.isEmpty(context()) || !months.length) {
+    table.className = 'indicator-table-wrap empty-state';
+    table.textContent = area.emptyMessage;
+    return;
+  }
+
+  const visible = state.month === 'all' ? months : months.filter((month) => month === state.month);
+  $('#timeline-range').textContent = `${monthLabel(visible[0])} até ${monthLabel(visible[visible.length - 1])}`;
+  table.className = 'indicator-table-wrap';
+  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible);
+  requestAnimationFrame(() => { table.scrollLeft = table.scrollWidth; });
+}
+
+function renderDetails(area) {
+  const section = $('#detail-section');
+  const details = area.details(context());
+  section.hidden = !details;
+  if (!details) return;
+  $('#detail-summary').textContent = details.summary;
+  $('#status-details').innerHTML = details.content;
 }
 
 function renderDataStatus(months = availableMonths()) {
@@ -483,23 +569,12 @@ function renderDataStatus(months = availableMonths()) {
   badge.textContent = months.length ? `${months.length} competências carregadas` : 'Aguardando dados';
 }
 
-function renderClassificationOptions() {
-  const select = $('#classification');
-  const values = [...new Set([...state.meetings, ...state.tasks].map((item) => item.classification).filter(Boolean))]
-    .sort((first, second) => String(first).localeCompare(String(second), 'pt-BR', { numeric: true }));
-  const selected = state.classification;
-  select.innerHTML = `<option value="all">Todas as classificações</option>${values.map((item) => `<option value="${item}">${item}</option>`).join('')}`;
-  select.value = values.includes(selected) ? selected : 'all';
-  state.classification = select.value;
-  select.disabled = values.length === 0;
-}
-
 function renderSyncStatus() {
   const period = syncWindow();
   $('#window-label').textContent = `${monthLabel(monthKey(period.start))} até ${monthLabel(monthKey(period.end))}`;
   $('#sync-when').textContent = state.sync.lastSync ? dateTimeLabel(state.sync.lastSync) : 'nunca';
-  $('#sync-meetings').textContent = formatNumber(state.meetings.length);
-  $('#sync-tasks').textContent = formatNumber(state.tasks.length);
+  $('#sync-meetings').textContent = formatNumber(state.data.meetings.length);
+  $('#sync-tasks').textContent = formatNumber(state.data.tasks.length);
   $('#sync-now').disabled = state.sync.running;
   $('#sync-full').disabled = state.sync.running;
 
@@ -508,119 +583,27 @@ function renderSyncStatus() {
   message.className = `sync-message${state.sync.error ? ' is-error' : state.sync.message ? ' is-ok' : ''}`;
 }
 
-function tabButtonState() {
-  document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('is-active', button.dataset.tab === state.activeTab));
-}
-
-function renderIndicatorPanel(months) {
-  tabButtonState();
-  const panel = $('#indicator-panel');
-  panel.innerHTML = `<section class="table-section"><div class="section-heading"><div><p class="eyebrow">LINHA DO TEMPO / ${state.activeTab.toUpperCase()}</p><h2>${{ volume: 'Volume', productivity: 'Produtividade', cost: 'Custo', quality: 'Qualidade' }[state.activeTab]}</h2></div><span id="timeline-range" class="muted">Sem competência carregada</span></div><div id="indicator-table" class="indicator-table-wrap"></div></section>`;
-  renderIndicatorTable(months);
-}
-
-function renderIndicatorTable(months) {
-  const table = $('#indicator-table');
-  if (!months.length) {
-    table.className = 'indicator-table-wrap empty-state';
-    table.textContent = 'Sincronize com o Hub na engrenagem para visualizar a linha do tempo.';
-    return;
-  }
-  const visible = state.month === 'all' ? months : months.filter((month) => month === state.month);
-  $('#timeline-range').textContent = `${monthLabel(visible[0])} até ${monthLabel(visible[visible.length - 1])}`;
-  const rows = timelineRows(state.activeTab, visible);
-  const comparison = comparisonPeriod(visible);
-  table.innerHTML = `<table class="indicator-table"><thead><tr><th>Indicador</th><th>${comparison.previousLabel}</th><th>${comparison.currentLabel}</th><th>Variação</th>${visible.map((month) => `<th>${monthLabel(month)}</th>`).join('')}</tr></thead><tbody>${rows.map((row) => { const previous = accumulated(row, comparison.previousMonths, comparison.endMonth); const current = accumulated(row, comparison.currentMonths, comparison.endMonth); const variation = previous ? (current / previous - 1) * 100 : null; return `<tr class="${row.section ? 'table-section-row' : ''}"><th>${row.label}</th><td>${row.format(previous)}</td><td>${row.format(current)}</td><td class="variation-cell ${variationClass(variation)}">${variation === null ? '-' : `${formatNumber(variation, 2)}%`}</td>${visible.map((month) => `<td>${row.format(row.value(month))}</td>`).join('')}</tr>`; }).join('')}</tbody></table>`;
-  requestAnimationFrame(() => { table.scrollLeft = table.scrollWidth; });
-}
-
-function comparisonPeriod(months) {
-  const endMonth = Number(months[months.length - 1].split('-')[1]);
-  const currentYear = Number(months[months.length - 1].split('-')[0]);
-  const previousYear = currentYear - 1;
-  const range = (year) => months.filter((month) => Number(month.split('-')[0]) === year && Number(month.split('-')[1]) <= endMonth);
-  return { endMonth, currentMonths: range(currentYear), previousMonths: range(previousYear), previousLabel: `jan/${String(previousYear).slice(-2)} a ${shortMonth(endMonth)}/${String(previousYear).slice(-2)}`, currentLabel: `jan/${String(currentYear).slice(-2)} a ${shortMonth(endMonth)}/${String(currentYear).slice(-2)}` };
-}
-
-function accumulated(row, months, endMonth) {
-  if (!months.length) return 0;
-  const values = months.filter((month) => Number(month.split('-')[1]) <= endMonth).map((month) => row.value(month));
-  if (row.aggregate === 'average') return values.length ? values.reduce((sum, valueToAdd) => sum + valueToAdd, 0) / values.length : 0;
-  return values.reduce((sum, valueToAdd) => sum + valueToAdd, 0);
-}
-
-function variationClass(variation) {
-  if (variation === null) return '';
-  if (variation > 5) return 'variation-good';
-  if (variation < -5) return 'variation-bad';
-  return 'variation-neutral';
-}
-
-function timelineRows(tab, months) {
-  const metric = (month) => metricsFor(month);
-  const totalActivities = (month) => metric(month).activities.length;
-  const average = (month, selector) => { const items = selector(metric(month)); return items.length ? items.reduce((sum, item) => sum + item.minutes, 0) / items.length / 60 : 0; };
-  const number = (valueToFormat) => formatNumber(valueToFormat);
-  const hours = (valueToFormat) => `${formatNumber(valueToFormat, 1)} h`;
-  const percent = (valueToFormat) => `${formatNumber(valueToFormat, 1)}%`;
-  if (tab === 'volume') return [
-    { label: 'Atividades finalizadas, em qtde', value: totalActivities, format: number },
-    { label: 'Reuniões realizadas, em qtde', value: (month) => metric(month).meetings.length, format: number },
-    { label: 'Tarefas realizadas, em qtde', value: (month) => metric(month).tasks.length, format: number },
-    { label: 'Atividades realizadas, em horas', value: (month) => metric(month).minutes / 60, format: hours },
-    { label: 'Clientes atendidos, em qtde', value: (month) => metric(month).clients, format: number },
-    { label: 'Responsáveis e participantes distintos', value: (month) => metric(month).people, format: number },
-    { label: 'Dias úteis do mês, em qtde', value: (month) => workingDays(month), format: number },
-    { label: 'Tempo de trabalho disponível, em HH/mês', value: (month) => metric(month).capacity, format: hours }
-  ];
-  if (tab === 'productivity') return [
-    { label: 'Tempo de trabalho disponível, em HH/mês', value: (month) => metric(month).capacity, format: hours },
-    { label: 'Horas apontadas, em HH', value: (month) => metric(month).minutes / 60, format: hours },
-    { label: 'Ocupação do tempo disponível, em %', value: (month) => metric(month).capacity ? metric(month).minutes / 60 / metric(month).capacity * 100 : 0, format: percent },
-    { label: 'Tempo médio das reuniões, em horas', value: (month) => average(month, (current) => current.meetings), format: hours },
-    { label: 'Tempo médio das tarefas, em horas', value: (month) => average(month, (current) => current.tasks), format: hours },
-    { label: 'Atividades, em qtde/cliente/mês', value: (month) => metric(month).clients ? totalActivities(month) / metric(month).clients : 0, format: (valueToFormat) => formatNumber(valueToFormat, 1) },
-    { label: 'Atividades, em qtde/dia', value: (month) => workingDays(month) ? totalActivities(month) / workingDays(month) : 0, format: (valueToFormat) => formatNumber(valueToFormat, 1) },
-    { label: 'Atividades, em qtde/dia/pessoa', value: (month) => workingDays(month) && metric(month).people ? totalActivities(month) / workingDays(month) / metric(month).people : 0, format: (valueToFormat) => formatNumber(valueToFormat, 1) }
-  ];
-  if (tab === 'cost') return [
-    { label: 'Custos totais pagos, em R$', value: (month) => metric(month).cost, format: formatCurrency },
-    { label: 'Custo por hora de atividade, em R$', value: (month) => metric(month).minutes ? metric(month).cost / (metric(month).minutes / 60) : 0, format: formatCurrency },
-    { label: 'Custo por atividade finalizada, em R$', value: (month) => totalActivities(month) ? metric(month).cost / totalActivities(month) : 0, format: formatCurrency },
-    ...[...new Set(months.flatMap((month) => Object.keys(metric(month).costByPlan)))].sort().map((plan) => ({ label: `Plano · ${plan}`, value: (month) => metric(month).costByPlan[plan] || 0, format: formatCurrency }))
-  ];
-  const statusRows = [...state.meetings, ...state.tasks].map((item) => item.status).filter(Boolean).filter((status, index, statuses) => statuses.indexOf(status) === index).sort();
-  return [
-    { label: 'Atividades finalizadas, em qtde', value: totalActivities, format: number },
-    { label: 'Atividades canceladas, em qtde', value: (month) => [...state.meetings, ...state.tasks].filter((item) => item.month === month && item.status.toLowerCase().includes('cancel')).length, format: number },
-    { label: 'Taxa de conclusão, em %', value: (month) => { const all = [...state.meetings, ...state.tasks].filter((item) => item.month === month); return all.length ? all.filter((item) => item.status === 'Finalizado').length / all.length * 100 : 0; }, format: percent },
-    ...statusRows.map((status) => ({ label: `Status · ${status}`, value: (month) => [...state.meetings, ...state.tasks].filter((item) => item.month === month && item.status === status).length, format: number }))
-  ];
-}
-
 function renderUploadStatus() {
   const meta = state.fileMeta.payments;
   const card = $('#upload-card-payments');
-  if (!card) return;
   card.classList.toggle('is-loaded', meta.loaded);
   const stateIcon = card.querySelector('.upload-state');
   const latest = card.querySelector('.upload-latest');
   stateIcon.textContent = meta.loaded ? '✓' : '○';
   stateIcon.setAttribute('aria-label', meta.loaded ? 'Upload concluído' : 'Aguardando upload');
-  latest.textContent = meta.loaded ? latestLabel(meta.latest) : 'Ainda não importado';
+  latest.textContent = meta.loaded ? (meta.latest ? `Dados mais recentes: ${monthLabel(meta.latest)}` : 'Sem competência válida') : 'Ainda não importado';
   latest.title = meta.name || '';
 }
 
-function renderDetails() {
-  const cancellations = [...state.meetings, ...state.tasks].filter((item) => item.status.toLowerCase().includes('cancel')).reduce((counts, item) => { counts[item.status] = (counts[item.status] || 0) + 1; return counts; }, {});
-  const ignored = [...state.meetings, ...state.tasks].filter((item) => item.status && item.status !== 'Finalizado' && !meetingStatuses.has(item.status) && !taskStatuses.has(item.status)).length;
-  const entries = Object.entries(cancellations);
-  $('#status-details').innerHTML = entries.length ? `${entries.map(([status, count]) => `<span class="status-row"><b>${status}</b><strong>${formatNumber(count)}</strong></span>`).join('')}<span class="status-row"><b>Registros com status não mapeado</b><strong>${formatNumber(ignored)}</strong></span>` : '<p class="muted">Nenhum cancelamento carregado.</p>';
-}
-
 function renderExcludedDates() {
-  $('#excluded-dates').innerHTML = [...state.excludedDates].sort().map((date) => `<span class="date-chip">${date}<button type="button" data-date="${date}" aria-label="Remover data">×</button></span>`).join('') || '<span class="muted">Nenhuma data adicional.</span>';
-  $('#excluded-dates').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => { state.excludedDates.delete(button.dataset.date); persistState(); renderExcludedDates(); render(); }));
+  const list = $('#excluded-dates');
+  list.innerHTML = [...state.excludedDates].sort().map((date) => `<span class="date-chip">${date}<button type="button" data-date="${date}" aria-label="Remover data">×</button></span>`).join('') || '<span class="muted">Nenhuma data adicional.</span>';
+  list.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => {
+    state.excludedDates.delete(button.dataset.date);
+    persistState();
+    renderExcludedDates();
+    render();
+  }));
 }
 
 restoreState().then(() => {

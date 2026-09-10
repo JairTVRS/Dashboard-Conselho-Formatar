@@ -31,8 +31,8 @@ const TASK_STATUS = {
 };
 
 const MESSAGES = {
-  401: 'Secret key ausente, inválida ou inativa. Configure a variável no Cloudflare Pages.',
-  403: 'Secret key sem permissão para esta operação ou bloqueada para esta origem.',
+  401: 'Secret key ausente, inválida ou inativa. Configure HUB_API_SECRET_KEY no Cloudflare Pages, ou em .env.local se estiver rodando localmente.',
+  403: 'A API recusou a chamada. Se a mensagem citar navegador, a requisição chegou sem passar pelo proxy server-side.',
   429: 'Limite de requisições da API excedido. Tente novamente em alguns minutos.',
   503: 'A secret key não está configurada no ambiente de publicação.'
 };
