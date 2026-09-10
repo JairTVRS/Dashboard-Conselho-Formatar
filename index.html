@@ -3,8 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#102a43" />
+    <meta name="theme-color" content="#f3f3f3" />
     <title>Indicadores Operacionais</title>
+    <script>
+      // Aplica o tema antes da primeira pintura para evitar flash de cor.
+      (function () {
+        try {
+          var saved = localStorage.getItem('formatar-dashboard-theme');
+          var theme = saved === 'light' || saved === 'dark'
+            ? saved
+            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.dataset.theme = theme;
+        } catch (error) {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

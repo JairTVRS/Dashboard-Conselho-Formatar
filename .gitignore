@@ -9,3 +9,5 @@ dist/
 *.xls
 *.csv
 ~$*
+# Cloudflare
+.wrangler/
