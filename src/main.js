@@ -907,6 +907,7 @@ function renderIndicatorPanel(area, months) {
   const table = $('#indicator-table');
   if (area.isEmpty(context()) || !months.length) {
     table.className = 'indicator-table-wrap empty-state';
+    delete table.dataset.shape;
     // Enquanto a primeira competência não fecha, mandar "sincronize na engrenagem"
     // é enganoso: a sincronização já está rodando e não há nada a fazer.
     table.textContent = emptyMessageFor(area);
@@ -916,7 +917,16 @@ function renderIndicatorPanel(area, months) {
   const visible = state.month === 'all' ? months : months.filter((month) => month === state.month);
   $('#timeline-range').textContent = `${monthLabel(visible[0])} até ${monthLabel(visible[visible.length - 1])}`;
   table.className = 'indicator-table-wrap';
-  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader, { sort: state.sort[area.id], periodMode: state.periodMode });
+
+  // Trocar o conteúdo zera a rolagem. Quando a tabela continua a mesma — só mudou a
+  // ordem das linhas — a posição é devolvida, senão cada clique no cabeçalho jogaria
+  // a pessoa para o mês mais antigo. Tabela de forma nova abre no mês mais recente.
+  const shape = `${area.id}|${activeTabs[area.id]}|${visible.join(',')}`;
+  const keepScroll = table.dataset.shape === shape;
+  const previousScroll = table.scrollLeft;
+
+  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader, { sort: sortFor(area), periodMode: state.periodMode });
+  table.dataset.shape = shape;
 
   table.querySelectorAll('[data-sort-column]').forEach((header) => {
     const activate = () => toggleSort(area.id, header.dataset.sortColumn);
@@ -926,9 +936,12 @@ function renderIndicatorPanel(area, months) {
     });
   });
 
-  // A rolagem só vai ao fim quando a tabela é montada do zero; reordenar no meio da
-  // linha do tempo jogaria a pessoa de volta para o mês mais recente a cada clique.
-  if (!state.sort[area.id]) requestAnimationFrame(() => { table.scrollLeft = table.scrollWidth; });
+  requestAnimationFrame(() => { table.scrollLeft = keepScroll ? previousScroll : table.scrollWidth; });
+}
+
+/** Ordenação em vigor: a escolhida por clique ou, na falta dela, o padrão da área. */
+function sortFor(area) {
+  return state.sort[area.id] || area.defaultSort || null;
 }
 
 /**
@@ -937,10 +950,12 @@ function renderIndicatorPanel(area, months) {
  * terceiro volta à ordem natural da área.
  */
 function toggleSort(areaId, column) {
-  const current = state.sort[areaId];
+  const current = sortFor(areaById(areaId));
   const first = column === 'label' ? 'asc' : 'desc';
   if (!current || current.column !== column) state.sort[areaId] = { column, direction: first };
   else if (current.direction === first) state.sort[areaId] = { column, direction: first === 'asc' ? 'desc' : 'asc' };
+  // Sem escolha própria, vale o padrão da área — que na Comercial é a própria coluna
+  // de período, então o ciclo ali fica em maior↔menor, sem um terceiro estado morto.
   else delete state.sort[areaId];
   render();
 }
