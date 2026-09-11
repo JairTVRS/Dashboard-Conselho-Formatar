@@ -198,6 +198,33 @@ ficam desabilitados nas abas de recebimento: repartir R$ por time seria inventar
 > competência aqui é o vencimento; filtrar pela finalização deixa de fora a parcela
 > que vence dentro da janela mas foi baixada fora dela.
 
+### Leitura dos CSV
+
+Os dois relatórios do financeiro são lidos como **texto cru** (`XLSX.read(texto,
+{ type: 'string', raw: true })`), e quem converte é `normalizeNumber` e
+`normalizeDate`. Deixar o SheetJS adivinhar o tipo de cada célula, que era o que
+acontecia até a v1.8.0, corrompia os dois campos que mais importam:
+
+| No arquivo | O que o SheetJS entregava | Efeito |
+|---|---|---|
+| `1.300,00` | `1.3` | o ponto de milhar vira decimal e os centavos somem |
+| `900,00` | `90000` | sem ponto de milhar, a vírgula some e o valor multiplica por 100 |
+| `01/12/2024` | 12 de janeiro de 2024 | dia e mês trocam sempre que o dia cabe como mês |
+
+Não era um caso de borda: atingia 45% das parcelas de recebimento e 93% das de
+pagamento, e inflava o recebimento de R$ 10,0 mi para R$ 18,6 mi. As linhas com dia
+maior que 12 escapavam, porque não podiam ser confundidas com mês — o que deixava o
+defeito com cara de dado irregular, não de bug.
+
+O BOM é removido antes de entregar o texto ao SheetJS: com ele na frente, a primeira
+aspa deixa de ser reconhecida como início de campo e o cabeçalho da coluna 1 vira a
+chave literal `﻿"Vencimento"`, o que faz o arquivo inteiro entrar vazio. Arquivos em
+ANSI são detectados pelo caractere de substituição e relidos como `windows-1252`,
+senão os acentos quebram e o nome do cliente deixa de casar com o cadastro.
+
+O `.xlsx` continua pelo caminho binário: lá número é número e data é data, sem texto
+para interpretar errado.
+
 ## Logos
 
 Coloque os arquivos oficiais em `public/`:
@@ -232,4 +259,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.8.0`.
+A versão atual do projeto é `1.8.1`.

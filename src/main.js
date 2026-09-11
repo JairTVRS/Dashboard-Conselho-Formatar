@@ -254,12 +254,41 @@ function toggleDrawer(open) {
 
 /* Importação de pagamentos ------------------------------------------------ */
 
+function sheetRows(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: true });
+}
+
+/**
+ * O CSV é lido como **texto cru**. O SheetJS adivinha o tipo de cada célula com
+ * convenção americana e estraga justamente os dois campos que importam: `1.300,00`
+ * vira `1.3`, porque o ponto de milhar é lido como decimal e os centavos somem, e
+ * `01/12/2024` vira 12 de janeiro, porque dia e mês trocam sempre que o dia cabe
+ * como mês. Nos relatórios do Hub isso atingia 45% das parcelas de recebimento e
+ * 93% das de pagamento, e inflava o total de R$ 10,0 mi para R$ 18,6 mi.
+ *
+ * Como `normalizeNumber` e `normalizeDate` já leem o formato pt-BR, basta entregar
+ * o texto original a eles. O `.xlsx` continua pelo caminho binário: lá número é
+ * número e data é data, sem texto para interpretar errado.
+ */
 function readFile(file) {
-  return file.arrayBuffer().then((buffer) => {
-    const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
-  });
+  if (/\.csv$/i.test(file.name)) {
+    return file.arrayBuffer().then((buffer) => sheetRows(XLSX.read(decodeText(buffer), { type: 'string', raw: true })));
+  }
+  return file.arrayBuffer().then((buffer) => sheetRows(XLSX.read(buffer, { type: 'array', cellDates: true })));
+}
+
+/**
+ * O BOM precisa sair antes do SheetJS: com ele na frente, a primeira aspa deixa de
+ * ser reconhecida como início de campo e o cabeçalho da coluna 1 vira a chave
+ * literal `﻿"Vencimento"` — nenhuma linha encontra a competência e o arquivo entra
+ * vazio. A troca para windows-1252 cobre exportações em ANSI: sem ela os acentos
+ * viram `�` e o nome do cliente deixa de casar com o cadastro.
+ */
+function decodeText(buffer) {
+  const utf8 = new TextDecoder('utf-8').decode(buffer);
+  const text = utf8.includes('�') ? new TextDecoder('windows-1252').decode(buffer) : utf8;
+  return text.replace(/^﻿/, '');
 }
 
 function value(row, names) {
