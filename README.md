@@ -128,6 +128,23 @@ a conexão não está configurada.
 `functions/api/[[path]].js` é a Pages Function que faz o proxy: aceita apenas `GET`
 e apenas os recursos `meetings`, `tasks` e `customers`.
 
+## Leitura das tabelas
+
+### Ordenação
+
+Todo cabeçalho ordena por clique, em Operações e na Comercial. O primeiro clique
+numa coluna de número traz do **maior para o menor**, que é o que se quer olhar; na
+coluna de rótulo, de A a Z. O clique seguinte inverte, e o terceiro volta à ordem
+natural da área — o ranking do ano corrente na Comercial, a sequência de leitura dos
+indicadores em Operações, que não é alfabética nem numérica.
+
+Linhas sem valor comparável — a variação de quem não tinha movimento no ano anterior
+— vão para o fim nos dois sentidos: elas não são as menores, são as que não têm
+resposta.
+
+Trocar de aba ou escolher uma competência específica volta à ordenação padrão: a
+coluna ordenada pode simplesmente não existir do outro lado.
+
 ## Área Comercial
 
 Matriz de cliente por mês, alimentada pelas atividades **finalizadas**, com cinco
@@ -259,4 +276,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.8.1`.
+A versão atual do projeto é `1.9.0`.

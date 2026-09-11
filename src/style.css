@@ -213,6 +213,13 @@ h3 { font-size: 15px; }
 .indicator-table thead th.col-previous, .indicator-table thead th.col-current { background: var(--head-alt); }
 .indicator-table thead th.col-variation { background: var(--orange); }
 .indicator-table thead th.col-month { background: var(--head-bg); }
+/* Cabeçalho clicável. O realce é sublinhado e seta, nunca cor de fundo: as colunas
+   fixas usam `box-shadow` como separador e cada uma já tem a sua cor de fundo, que
+   é o que distingue mês, acumulado e variação. */
+.indicator-table thead th.is-sortable { cursor: pointer; user-select: none; }
+.indicator-table thead th.is-sortable:hover, .indicator-table thead th.is-sortable:focus-visible { text-decoration: underline; text-underline-offset: 4px; outline: none; }
+.indicator-table thead th.is-sorted { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.sort-arrow { margin-left: 6px; font-size: 9px; vertical-align: 1px; }
 .indicator-table tbody th { color: var(--ink); text-align: left; font-weight: 500; }
 .indicator-table tbody td { color: var(--ink); font-weight: 500; }
 .indicator-table tbody tr:nth-child(even) { background: var(--row-alt); }

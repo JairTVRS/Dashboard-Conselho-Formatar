@@ -57,25 +57,63 @@ export function variationClass(variation) {
 }
 
 /**
+ * Ordena pela coluna escolhida. Linhas sem valor comparável — a variação de quem não
+ * tinha movimento no ano anterior — vão sempre para o fim, nos dois sentidos: elas
+ * não são "as menores", são as que não têm resposta.
+ */
+function sortEntries(entries, sort) {
+  if (!sort?.column) return entries;
+  const factor = sort.direction === 'asc' ? 1 : -1;
+  const valueOf = (entry) => {
+    if (sort.column === 'label') return entry.row.label;
+    if (sort.column === 'previous') return entry.previous;
+    if (sort.column === 'current') return entry.current;
+    if (sort.column === 'variation') return entry.variation;
+    return entry.row.value(sort.column);
+  };
+
+  return [...entries].sort((first, second) => {
+    const left = valueOf(first);
+    const right = valueOf(second);
+    if (left === null && right === null) return 0;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    if (typeof left === 'string') return left.localeCompare(right, 'pt-BR') * factor;
+    return (left - right) * factor;
+  });
+}
+
+/** Cabeçalho clicável, com a seta só na coluna que está ordenando. */
+function headCell(className, label, column, sort) {
+  const active = sort?.column === column;
+  const arrow = active ? `<span class="sort-arrow">${sort.direction === 'asc' ? '▲' : '▼'}</span>` : '';
+  const ariaSort = active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none';
+  return `<th class="${className} is-sortable${active ? ' is-sorted' : ''}" data-sort-column="${column}" aria-sort="${ariaSort}" tabindex="0" role="button" title="Ordenar por ${label}">${label}${arrow}</th>`;
+}
+
+/**
  * As colunas levam classe própria em vez de serem pintadas por posição: quando a
  * comparação está oculta, as colunas de mês assumem a posição das que sumiram e
  * herdariam o cinza do acumulado e o laranja da variação.
  */
-export function tableMarkup(rows, visibleMonths, labelHeader = 'Indicador') {
+export function tableMarkup(rows, visibleMonths, labelHeader = 'Indicador', sort = null) {
   const comparison = comparisonPeriod(visibleMonths);
-  const previousHead = comparison.comparable ? `<th class="col-previous">${comparison.previousLabel}</th>` : '';
-  const variationHead = comparison.comparable ? '<th class="col-variation">Variação</th>' : '';
-  const monthHeads = visibleMonths.map((month) => `<th class="col-month">${monthLabel(month)}</th>`).join('');
-  const head = `<thead><tr><th class="col-label">${labelHeader}</th>${previousHead}<th class="col-current">${comparison.currentLabel}</th>${variationHead}${monthHeads}</tr></thead>`;
+  const previousHead = comparison.comparable ? headCell('col-previous', comparison.previousLabel, 'previous', sort) : '';
+  const variationHead = comparison.comparable ? headCell('col-variation', 'Variação', 'variation', sort) : '';
+  const monthHeads = visibleMonths.map((month) => headCell('col-month', monthLabel(month), month, sort)).join('');
+  const head = `<thead><tr>${headCell('col-label', labelHeader, 'label', sort)}${previousHead}${headCell('col-current', comparison.currentLabel, 'current', sort)}${variationHead}${monthHeads}</tr></thead>`;
 
-  const body = rows.map((row) => {
+  const entries = rows.map((row) => {
     const current = accumulated(row, comparison.currentMonths, comparison.endMonth);
+    const previous = comparison.comparable ? accumulated(row, comparison.previousMonths, comparison.endMonth) : 0;
+    return { row, current, previous, variation: comparison.comparable && previous ? (current / previous - 1) * 100 : null };
+  });
+
+  const body = sortEntries(entries, sort).map(({ row, current, previous, variation }) => {
     const cells = visibleMonths.map((month) => `<td class="col-month">${row.format(row.value(month))}</td>`).join('');
     if (!comparison.comparable) {
       return `<tr><th class="col-label">${row.label}</th><td class="col-current">${row.format(current)}</td>${cells}</tr>`;
     }
-    const previous = accumulated(row, comparison.previousMonths, comparison.endMonth);
-    const variation = previous ? (current / previous - 1) * 100 : null;
     return `<tr><th class="col-label">${row.label}</th><td class="col-previous">${row.format(previous)}</td><td class="col-current">${row.format(current)}</td><td class="col-variation variation-cell ${variationClass(variation)}">${variation === null ? '-' : `${formatNumber(variation, 2)}%`}</td>${cells}</tr>`;
   }).join('');
 

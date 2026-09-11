@@ -27,7 +27,11 @@ const state = {
   month: 'all',
   area: 'operacoes',
   sidebarCollapsed: window.innerWidth < COLLAPSE_BREAKPOINT,
-  areaFilters: {}
+  areaFilters: {},
+  // Ordenação escolhida por clique no cabeçalho, por área. Vazio significa a ordem
+  // natural da área — em Comercial, o ranking do ano corrente; em Operações, a
+  // sequência de leitura dos indicadores, que não é alfabética nem numérica.
+  sort: {}
 };
 
 areas.forEach((area) => { state.areaFilters[area.id] = { ...area.defaultFilters }; });
@@ -852,7 +856,13 @@ function renderFilters(area, months) {
 
   const monthSelect = container.querySelector('#month');
   monthSelect.value = monthValue;
-  monthSelect.addEventListener('change', (event) => { state.month = event.target.value; render(); });
+  monthSelect.addEventListener('change', (event) => {
+    state.month = event.target.value;
+    // Escolher uma competência específica apaga as colunas de mês que sobravam, e
+    // com elas a coluna que estava ordenando.
+    delete state.sort[area.id];
+    render();
+  });
 }
 
 function renderTabs(area) {
@@ -861,6 +871,9 @@ function renderTabs(area) {
   nav.innerHTML = area.tabs.map((tab) => `<button class="indicator-tab${tab.id === activeTabs[area.id] ? ' is-active' : ''}" data-tab="${tab.id}" type="button">${tab.label}</button>`).join('');
   nav.querySelectorAll('[data-tab]').forEach((button) => button.addEventListener('click', () => {
     activeTabs[area.id] = button.dataset.tab;
+    // A coluna ordenada da aba anterior não existe necessariamente na próxima, e
+    // ordenar reuniões pela ordem do recebimento não quer dizer nada.
+    delete state.sort[area.id];
     render();
   }));
 }
@@ -885,8 +898,33 @@ function renderIndicatorPanel(area, months) {
   const visible = state.month === 'all' ? months : months.filter((month) => month === state.month);
   $('#timeline-range').textContent = `${monthLabel(visible[0])} até ${monthLabel(visible[visible.length - 1])}`;
   table.className = 'indicator-table-wrap';
-  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader);
-  requestAnimationFrame(() => { table.scrollLeft = table.scrollWidth; });
+  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader, state.sort[area.id]);
+
+  table.querySelectorAll('[data-sort-column]').forEach((header) => {
+    const activate = () => toggleSort(area.id, header.dataset.sortColumn);
+    header.addEventListener('click', activate);
+    header.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate(); }
+    });
+  });
+
+  // A rolagem só vai ao fim quando a tabela é montada do zero; reordenar no meio da
+  // linha do tempo jogaria a pessoa de volta para o mês mais recente a cada clique.
+  if (!state.sort[area.id]) requestAnimationFrame(() => { table.scrollLeft = table.scrollWidth; });
+}
+
+/**
+ * O primeiro clique numa coluna de número ordena do maior para o menor, que é o que
+ * se quer olhar; na coluna de rótulo, de A a Z. O clique seguinte inverte, e o
+ * terceiro volta à ordem natural da área.
+ */
+function toggleSort(areaId, column) {
+  const current = state.sort[areaId];
+  const first = column === 'label' ? 'asc' : 'desc';
+  if (!current || current.column !== column) state.sort[areaId] = { column, direction: first };
+  else if (current.direction === first) state.sort[areaId] = { column, direction: first === 'asc' ? 'desc' : 'asc' };
+  else delete state.sort[areaId];
+  render();
 }
 
 function renderDetails(area) {
