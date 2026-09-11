@@ -163,6 +163,11 @@ depois de montar a tabela.
 **25. Filtros de recorte aceitam mais de uma escolha** (v1.13.0), com as seleções
 como tags removíveis dentro do campo. Nada marcado continua significando tudo.
 
+**26. Filtro de status do cliente na Comercial** (v1.14.0), começando em **Ativo**.
+A carteira tem 732 inativos contra 187 ativos, 24 prospects e 7 ad hoc, então a
+matriz abria dominada por quem já saiu. Com o padrão, a aba de Recebimento cai de 209
+para 145 clientes — R$ 1,38 mi dos R$ 9,44 mi pertencem a cliente hoje inativo.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10

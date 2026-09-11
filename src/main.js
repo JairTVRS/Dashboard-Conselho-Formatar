@@ -893,12 +893,15 @@ function renderFilters(area, months) {
 
   const periodBlock = area.pending ? '' : `<div class="filter-block"><label for="period-mode">Coluna de período</label><select id="period-mode"><option value="average">Média mensal</option><option value="sum">Soma do período</option></select></div>`;
 
-  // O valor guardado é limpo contra as opções que existem agora: o filtro de Time
-  // fica sem opção nenhuma nas abas de recebimento, e uma escolha órfã continuaria
-  // recortando a tabela sem aparecer em lugar nenhum.
+  // O valor guardado é limpo contra as opções que existem agora, senão uma escolha
+  // órfã continuaria recortando a tabela sem aparecer em lugar nenhum. Lista de
+  // opções vazia não limpa nada: é o estado de quem ainda não sincronizou, e apagar
+  // ali derrubaria o padrão da área — o recorte por cliente ativo, por exemplo.
   areaFilters.forEach((filter) => {
+    if (!Array.isArray(stored[filter.id])) stored[filter.id] = [];
+    if (!filter.options.length) return;
     const values = filter.options.map((option) => String(option.value));
-    stored[filter.id] = (Array.isArray(stored[filter.id]) ? stored[filter.id] : []).filter((value) => values.includes(String(value)));
+    stored[filter.id] = stored[filter.id].filter((value) => values.includes(String(value)));
   });
 
   container.innerHTML = `

@@ -62,6 +62,30 @@ function teamsOf(item, reference) {
 /** Nada escolhido é "tudo": é como o filtro começa e é o que o campo mostra. */
 const chosen = (selected, value) => !selected.length || selected.includes(value);
 
+/**
+ * Status do cliente, na ordem em que faz sentido escolher. O padrão da área é só
+ * **Ativo**: a carteira tem 732 inativos contra 187 ativos, e sem esse recorte a
+ * matriz abre dominada por quem já saiu.
+ */
+const CUSTOMER_STATUS = [
+  { value: 'active', label: 'Ativo' },
+  { value: 'ad_hoc', label: 'Ad hoc' },
+  { value: 'prospect', label: 'Prospect' },
+  { value: 'inactive', label: 'Inativo' }
+];
+
+/**
+ * Cliente sem status conhecido passa. Isso vale enquanto a sincronização não trouxe
+ * o campo novo: o cache guardado por uma versão anterior não tem `status`, e recortar
+ * por "ativo" ali esvaziaria a tela inteira até o próximo sync terminar.
+ */
+function statusAllows(context, client) {
+  const selected = Array.isArray(context.filters?.status) ? context.filters.status : [];
+  if (!selected.length) return true;
+  const status = context.data.customers?.[client]?.status;
+  return !status || selected.includes(status);
+}
+
 /** Filtros ativos, já considerando que as visões de recebimento ignoram time e grupo. */
 function activeFilters(context, tab) {
   const filters = context.filters || {};
@@ -85,6 +109,7 @@ function selects(context, tab) {
 
   return (item) => {
     if (item.status !== 'Finalizado' || !item.month || !item.client) return false;
+    if (!statusAllows(context, item.client)) return false;
     if (!chosen(classification, item.classification)) return false;
     if (team.length && !teamsOf(item, reference).some((id) => team.includes(id))) return false;
     if (userGroup.length && !item.people.some((person) => userGroup.includes(reference.userGroupOf?.[person]))) return false;
@@ -132,6 +157,7 @@ function buildIndex(context, tab) {
   const { matched } = resolveReceipts(context);
   const { classification } = activeFilters(context, tab);
   matched.forEach((receipt) => {
+    if (!statusAllows(context, receipt.client)) return;
     if (!chosen(classification, context.data.classifications?.[receipt.client] || '')) return;
     cell(receipt.client, receipt.month).revenue += receipt.amount || 0;
   });
@@ -175,7 +201,7 @@ export const comercial = {
   // implícito no ranking das linhas, acende a seta no cabeçalho: sem ela não dá para
   // saber por qual coluna a tabela está ordenada nem que basta clicar para inverter.
   defaultSort: { column: 'current', direction: 'desc' },
-  defaultFilters: { classification: [], team: [], userGroup: [] },
+  defaultFilters: { status: ['active'], classification: [], team: [], userGroup: [] },
 
   filters(context) {
     const revenue = REVENUE_VIEWS.has(context.tab);
@@ -191,7 +217,17 @@ export const comercial = {
     const teams = byTitle(Object.entries(reference.teams || {}));
     const groups = byTitle(Object.entries(reference.userGroups || {}));
 
+    // Só os status que existem na carteira entram na lista, na ordem declarada.
+    const statuses = new Set(Object.values(context.data.customers || {}).map((customer) => customer.status).filter(Boolean));
+
     return [
+      {
+        id: 'status',
+        label: 'Status do cliente',
+        placeholder: 'Todos os status',
+        disabled: statuses.size === 0,
+        options: CUSTOMER_STATUS.filter((item) => statuses.has(item.value))
+      },
       {
         id: 'classification',
         label: 'Classificação',
@@ -319,8 +355,10 @@ export const comercial = {
     const parcelas = (count) => `${formatNumber(count)} ${count === 1 ? 'parcela' : 'parcelas'}`;
     const line = (label, list) => `<span class="status-row"><b>${label} · ${parcelas(list.length)}</b><strong>${formatCurrency(total(list))}</strong></span>`;
 
+    // "Importado", não "na matriz": o painel confere o arquivo, e o que a matriz
+    // mostra ainda passa pelos filtros de status e classificação.
     const content = [
-      line(`Na matriz · ${RECEIPT_SCOPE}`, matched),
+      line(`Importado · ${RECEIPT_SCOPE}`, matched),
       outOfScope.length ? line('Fora do escopo · outros centros de custo', outOfScope) : '',
       orphans.length ? line('Sem cliente correspondente', orphans) : ''
     ].join('');

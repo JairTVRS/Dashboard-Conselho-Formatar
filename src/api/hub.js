@@ -15,7 +15,7 @@ const TASK_FIELDS = 'id,nid,status,customer,responsible,team,dueDate,durationInM
 // `tradingName` é o campo "Nome" da tela do cliente; `companyName` é a razão social.
 // O relatório de recebimentos traz o Nome na coluna Entidade, então é por ele que os
 // dois lados se encontram — a razão social fica só como chave de reserva.
-const CUSTOMER_FIELDS = 'id,nid,companyName,tradingName,classification';
+const CUSTOMER_FIELDS = 'id,nid,companyName,tradingName,classification,status';
 
 /**
  * Coleções pequenas e estáveis que dão nome e vínculo ao que as atividades guardam
@@ -292,7 +292,14 @@ export async function fetchCustomers({ onProgress } = {}) {
     classifications[id] = row.classification == null ? '' : String(row.classification).trim();
     const companyName = String(row.companyName || '').trim();
     const tradingName = String(row.tradingName || '').trim();
-    customers[id] = { nid: row.nid == null ? '' : String(row.nid), name: tradingName || companyName, companyName };
+    customers[id] = {
+      nid: row.nid == null ? '' : String(row.nid),
+      name: tradingName || companyName,
+      companyName,
+      // `active`, `inactive`, `prospect` ou `ad_hoc` — o mesmo campo Status da tela
+      // do cliente. A Comercial recorta por ele, mostrando só os ativos por padrão.
+      status: String(row.status || '').trim()
+    };
   });
   return { classifications, customers };
 }

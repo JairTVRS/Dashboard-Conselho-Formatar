@@ -132,9 +132,27 @@ e apenas os recursos `meetings`, `tasks` e `customers`.
 
 ### Filtros de recorte
 
-Classificação, Time e Grupo de Usuário na Comercial, e Visão e Classificação do
-cliente em Operações, aceitam **mais de uma escolha**. Cada seleção vira uma tag
-removível dentro do próprio campo, e a lista abre com caixas de seleção.
+Status do cliente, Classificação, Time e Grupo de Usuário na Comercial, e Visão e
+Classificação do cliente em Operações, aceitam **mais de uma escolha**. Cada seleção
+vira uma tag removível dentro do próprio campo, e a lista abre com caixas de seleção.
+
+**Status do cliente começa em "Ativo"** — é o único filtro que nasce com uma escolha
+feita. A carteira tem 732 inativos contra 187 ativos, então sem esse recorte a matriz
+abre dominada por quem já saiu. Os valores vêm do campo Status do cadastro:
+
+| API | Tela |
+|---|---|
+| `active` | Ativo |
+| `ad_hoc` | Ad hoc |
+| `prospect` | Prospect |
+| `inactive` | Inativo |
+
+Duas coisas que decorrem disso. O status é o de **hoje**, não o da época: um cliente
+que faturou em 2025 e foi inativado em 2026 sai da tabela inteira, inclusive das
+colunas de 2025 — o que muda a comparação entre anos. E cliente **sem status
+conhecido passa pelo filtro**, porque o cache guardado por uma versão anterior não
+tem o campo, e recortar por "ativo" ali esvaziaria a tela até o sync seguinte
+terminar.
 
 **Nada marcado significa tudo** — o campo mostra "Todas as classificações" em vez de
 ficar vazio, que pareceria filtro zerando a tabela. Filtros diferentes se somam: com
@@ -210,6 +228,7 @@ interna não pertence a linha nenhuma daqui.
 | Filtro | Caminho |
 |---|---|
 | Nome do cliente | `customers.tradingName` — o campo **Nome** da tela do cliente. A razão social (`companyName`) fica guardada só como chave de reserva para casar relatórios importados à mão |
+| Status do cliente | `customers.status` |
 | Classificação | `customers.classification` |
 | Time | `tasks.team` direto; a reunião chega pelo `meetingType`, e um tipo pode pertencer a mais de um time |
 | Grupo de Usuário | responsável e participantes → `users.userGroup` |
@@ -331,4 +350,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.13.0`.
+A versão atual do projeto é `1.14.0`.
