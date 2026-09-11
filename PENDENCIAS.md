@@ -131,6 +131,28 @@ natural no terceiro clique.
 média divide só pelos meses com valor: um cliente que entrou em julho não deve ter a
 média diluída pelos meses em que ainda não era cliente.
 
+## Lote v1.10.1 → v1.12.0 · Depois da primeira olhada em produção
+
+Levantado em 2026-09-11, conferindo a v1.10.0 na tela.
+
+**21. A rolagem travava no mês mais antigo quando havia ordenação** (v1.10.1).
+Introduzido na v1.9.0: desliguei a rolagem automática para não jogar a pessoa ao fim
+da linha do tempo a cada clique, mas trocar o conteúdo da tabela zera `scrollLeft` —
+o efeito foi o oposto. Agora a posição é guardada e devolvida quando a tabela
+continua a mesma; forma nova ainda abre no mês mais recente.
+
+**22. Ordenação padrão explícita na Comercial** (v1.11.0). A matriz já vinha ordenada
+pela coluna do ano corrente, mas sem seta no cabeçalho — não dava para saber por onde
+estava ordenada nem que bastava clicar para inverter. A área passa a declarar
+`defaultSort`. Operações fica de fora: lá as linhas têm sequência de leitura.
+
+**23. Aviso de arquivo importado por leitor antigo** (v1.12.0). A v1.8.1 corrigiu a
+leitura, mas o cache guarda a linha já normalizada — quem importou antes continuou
+vendo número errado sem nenhum sinal na tela. Foi o que aconteceu: a MAMÃE OLÍVIA
+aparecia com média de R$ 307.865 (quatro parcelas de ~R$ 770 empilhadas num mês só e
+multiplicadas por 100) quando o certo é R$ 770. Cada arquivo passa a guardar a versão
+do leitor, e versão antiga acende aviso no card e no badge.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10

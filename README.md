@@ -272,6 +272,14 @@ senão os acentos quebram e o nome do cliente deixa de casar com o cadastro.
 O `.xlsx` continua pelo caminho binário: lá número é número e data é data, sem texto
 para interpretar errado.
 
+**Corrigir o leitor não corrige o que já está gravado.** O cache guarda a linha já
+normalizada, então quem importou antes continua vendo os números errados — e errado
+sem aviso é pior do que vazio. Cada arquivo importado passa a guardar a versão do
+leitor que o leu (`FILE_READER_VERSION` em `src/main.js`); quando ela é anterior à
+atual, o card fica laranja pedindo a reimportação e o badge do cabeçalho cobra em vez
+de contar competências. Subir o número dessa constante é o que aciona o aviso numa
+próxima mudança de leitura.
+
 ## Logos
 
 Coloque os arquivos oficiais em `public/`:
@@ -306,4 +314,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.11.0`.
+A versão atual do projeto é `1.12.0`.

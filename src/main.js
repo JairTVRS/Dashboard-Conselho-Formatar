@@ -14,6 +14,16 @@ const DATABASE_VERSION = 1;
 const DATABASE_STORE = 'dashboard-state';
 const COLLAPSE_BREAKPOINT = 1100;
 
+/**
+ * Sobe quando a leitura dos arquivos muda de resultado. O cache guarda a linha já
+ * normalizada, então corrigir o leitor não corrige o que já está gravado — e um
+ * número errado sem aviso é pior do que tela vazia. A versão 1 é a leitura que
+ * deixava o SheetJS adivinhar tipo e corrompia valor e competência; a 2 lê o CSV
+ * como texto cru. Arquivo importado por uma versão anterior acende o aviso.
+ */
+const FILE_READER_VERSION = 2;
+const FILE_LABELS = { payments: 'pagamentos', receipts: 'recebimentos' };
+
 const state = {
   // `payments` é o contas a pagar, que vira Custo em Operações; `receipts` é o contas
   // a receber, que vira Recebimento na Comercial. São relatórios diferentes do Hub e
@@ -199,7 +209,7 @@ $('#payment-file').addEventListener('change', async (event) => {
   try {
     state.data.payments = mergePayments(normalizePaymentRows(await readFile(file)));
     const latest = [...new Set(state.data.payments.map((item) => item.month).filter(Boolean))].sort().at(-1) || '';
-    state.fileMeta.payments = { name: file.name, latest, loaded: true };
+    state.fileMeta.payments = { name: file.name, latest, loaded: true, reader: FILE_READER_VERSION };
     persistState();
     $('#upload-feedback').textContent = `${file.name} carregado: ${state.data.payments.length.toLocaleString('pt-BR')} registros válidos para análise.`;
     render();
@@ -214,7 +224,7 @@ $('#receipt-file').addEventListener('change', async (event) => {
   try {
     state.data.receipts = mergeReceipts(normalizeReceiptRows(await readFile(file)));
     const latest = [...new Set(state.data.receipts.map((item) => item.month).filter(Boolean))].sort().at(-1) || '';
-    state.fileMeta.receipts = { name: file.name, latest, loaded: true };
+    state.fileMeta.receipts = { name: file.name, latest, loaded: true, reader: FILE_READER_VERSION };
     persistState();
     $('#receipt-feedback').textContent = `${file.name} carregado: ${state.data.receipts.length.toLocaleString('pt-BR')} parcelas válidas para análise.`;
     render();
@@ -973,6 +983,13 @@ function renderDataStatus(months) {
   const badge = $('#data-status');
   if (state.sync.running) { badge.textContent = syncBadgeText(); return; }
   if (state.sync.error) { badge.textContent = 'Falha na sincronização'; return; }
+  // Um arquivo lido pela versão antiga não deixa a tela vazia: deixa números errados
+  // no lugar dos certos. O badge cobra a reimportação até ela acontecer.
+  const stale = staleImports();
+  if (stale.length) {
+    badge.textContent = stale.length > 1 ? 'Reimporte os relatórios do financeiro' : `Reimporte o relatório de ${FILE_LABELS[stale[0]]}`;
+    return;
+  }
   // A lista só importa aqui. Calcular no parâmetro faria o relógio de espera varrer
   // dezenas de milhares de registros a cada segundo, sem usar o resultado.
   const list = months ?? availableMonths();
@@ -1004,16 +1021,27 @@ function renderSyncStatus() {
   if (state.sync.running && !currentArea().pending && table?.classList.contains('empty-state')) table.textContent = emptyMessageFor(currentArea());
 }
 
+/** Arquivos em cache que vieram de uma versão anterior do leitor. */
+function staleImports() {
+  return Object.keys(FILE_LABELS).filter((kind) => {
+    const meta = state.fileMeta[kind];
+    return meta?.loaded && (meta.reader || 1) < FILE_READER_VERSION;
+  });
+}
+
 function renderUploadStatus() {
   [['payments', '#upload-card-payments'], ['receipts', '#upload-card-receipts']].forEach(([kind, selector]) => {
     const meta = state.fileMeta[kind];
+    const stale = meta.loaded && (meta.reader || 1) < FILE_READER_VERSION;
     const card = $(selector);
     card.classList.toggle('is-loaded', meta.loaded);
+    card.classList.toggle('is-stale', stale);
     const stateIcon = card.querySelector('.upload-state');
     const latest = card.querySelector('.upload-latest');
-    stateIcon.textContent = meta.loaded ? '✓' : '○';
-    stateIcon.setAttribute('aria-label', meta.loaded ? 'Upload concluído' : 'Aguardando upload');
-    latest.textContent = meta.loaded ? (meta.latest ? `Dados mais recentes: ${monthLabel(meta.latest)}` : 'Sem competência válida') : 'Ainda não importado';
+    stateIcon.textContent = stale ? '!' : meta.loaded ? '✓' : '○';
+    stateIcon.setAttribute('aria-label', stale ? 'Reimportação necessária' : meta.loaded ? 'Upload concluído' : 'Aguardando upload');
+    if (stale) latest.textContent = 'Importado por uma versão anterior — reimporte para corrigir os números';
+    else latest.textContent = meta.loaded ? (meta.latest ? `Dados mais recentes: ${monthLabel(meta.latest)}` : 'Sem competência válida') : 'Ainda não importado';
     latest.title = meta.name || '';
   });
 }

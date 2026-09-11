@@ -293,6 +293,10 @@ h3 { font-size: 15px; }
 .upload-card.is-loaded .upload-state { color: var(--ok); }
 .upload-latest { color: var(--muted); font-size: 11px; }
 .upload-card.is-loaded .upload-latest { color: var(--ok-ink); font-weight: 700; }
+/* Arquivo importado por uma versão anterior do leitor: os números estão na tela e
+   estão errados, então o card perde o verde de "concluído" e pede a reimportação. */
+.upload-card.is-stale, .upload-card.is-loaded.is-stale { border-style: solid; border-color: var(--orange); background: var(--row-hover); }
+.upload-card.is-stale .upload-state, .upload-card.is-loaded.is-stale .upload-latest { color: var(--orange); font-weight: 700; }
 .upload-feedback { margin-top: 14px; color: var(--muted); font-size: 13px; }
 
 .danger-zone { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 8px; justify-items: start; }
