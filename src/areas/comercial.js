@@ -16,16 +16,23 @@ function nameKey(raw) {
 }
 
 /**
- * Casa cada pagamento com um cliente: primeiro pelo nid, que é exato; o que sobrar
- * tenta pelo nome normalizado. O que não casar é contado, nunca descartado em
- * silêncio — aparece no detalhe da área.
+ * A matriz comercial conta o que a consultoria fatura. Recrutamento (Formatar RH) e
+ * a assinatura de BI (Simple) são receita do mesmo cliente, mas as horas desta tela
+ * são só de consultoria: somar os três distorceria o recebimento por hora de quem
+ * contrata RH. O que fica de fora aparece no detalhe da área, com o valor.
  */
-function resolvePayments(context) {
+const RECEIPT_SCOPE = 'Consultoria Empresarial';
+
+/**
+ * Casa cada parcela recebida com um cliente pelo **nome**: a coluna `Entidade` do
+ * relatório traz o Nome do cadastro, e o `NID` de lá identifica a parcela, não o
+ * cliente — casar por ele encontraria o cliente errado por coincidência de número.
+ * O que não casar é contado, nunca descartado em silêncio.
+ */
+function resolveReceipts(context) {
   const customers = context.data.customers || {};
-  const byNid = {};
   const byName = {};
   Object.entries(customers).forEach(([id, customer]) => {
-    if (customer.nid) byNid[String(customer.nid)] = id;
     // O Nome vem primeiro porque é o que os relatórios do financeiro trazem; a razão
     // social entra depois e só ocupa as chaves que sobraram.
     [customer.name, customer.companyName].forEach((candidate) => {
@@ -36,13 +43,15 @@ function resolvePayments(context) {
 
   const matched = [];
   const orphans = [];
-  (context.data.payments || []).forEach((payment) => {
-    if (!payment.paid || !payment.month) return;
-    const id = byNid[String(payment.nid || '').trim()] || byName[nameKey(payment.client)] || '';
-    if (id) matched.push({ ...payment, client: id });
-    else orphans.push(payment);
+  const outOfScope = [];
+  (context.data.receipts || []).forEach((receipt) => {
+    if (!receipt.paid || !receipt.month) return;
+    if (receipt.costCenter !== RECEIPT_SCOPE) { outOfScope.push(receipt); return; }
+    const id = byName[nameKey(receipt.client)] || '';
+    if (id) matched.push({ ...receipt, client: id });
+    else orphans.push(receipt);
   });
-  return { matched, orphans };
+  return { matched, orphans, outOfScope };
 }
 
 function teamsOf(item, reference) {
@@ -116,15 +125,28 @@ function buildIndex(context, tab) {
     entry.people += peopleIn(item, context, tab);
   });
 
-  const { matched, orphans } = resolvePayments(context);
+  const { matched } = resolveReceipts(context);
   const { classification } = activeFilters(context, tab);
-  matched.forEach((payment) => {
-    if (classification !== 'all' && (context.data.classifications?.[payment.client] || '') !== classification) return;
-    cell(payment.client, payment.month).revenue += payment.amount || 0;
+  matched.forEach((receipt) => {
+    if (classification !== 'all' && (context.data.classifications?.[receipt.client] || '') !== classification) return;
+    cell(receipt.client, receipt.month).revenue += receipt.amount || 0;
   });
 
-  return { index, orphans };
+  return index;
 }
+
+/**
+ * Cada aba tem a sua métrica, e a linha só entra quando a métrica da aba tem valor.
+ * Sem isso, um cliente que só aparece no relatório de recebimentos encheria a aba de
+ * Tempo de duração com uma linha de zeros.
+ */
+const TAB_METRIC = {
+  duration: 'hours',
+  meetings: 'meetings',
+  people: 'people',
+  revenue: 'revenue',
+  revenuePerHour: 'revenue'
+};
 
 export const comercial = {
   id: 'comercial',
@@ -186,11 +208,23 @@ export const comercial = {
     ];
   },
 
-  isEmpty: (context) => !context.data.meetings.length && !context.data.tasks.length && !context.data.payments.length,
-  emptyMessage: 'Sincronize com o Hub na engrenagem para montar a matriz por cliente.',
+  // As abas de R$ dependem de um arquivo importado, não da sincronização. Mostrar
+  // "R$ 0" em toda a coluna enquanto o relatório não chega é pior do que a tela
+  // vazia: zero tem cara de número apurado.
+  isEmpty(context) {
+    if (REVENUE_VIEWS.has(context.tab)) return !(context.data.receipts || []).length;
+    return !context.data.meetings.length && !context.data.tasks.length;
+  },
+
+  emptyMessage(context) {
+    if (REVENUE_VIEWS.has(context.tab)) {
+      return 'Importe o relatório de recebimentos na engrenagem para preencher esta aba. Sincronizar com o Hub não resolve: a API não expõe o financeiro.';
+    }
+    return context.syncing ? context.syncingMessage : 'Sincronize com o Hub na engrenagem para montar a matriz por cliente.';
+  },
 
   rows(tab, months, context) {
-    const { index } = buildIndex(context, tab);
+    const index = buildIndex(context, tab);
     const customers = context.data.customers || {};
     const valueOf = (client, month, field) => index.get(client)?.get(month)?.[field] || 0;
     const sumOver = (client, range, field) => range.reduce((total, month) => total + valueOf(client, month, field), 0);
@@ -209,11 +243,9 @@ export const comercial = {
       return sumOver(client, currentMonths, 'hours');
     };
 
+    const metric = TAB_METRIC[tab] || 'hours';
     const clients = [...index.keys()]
-      .filter((client) => months.some((month) => {
-        const entry = index.get(client)?.get(month);
-        return entry && (entry.hours || entry.people || entry.meetings || entry.revenue);
-      }))
+      .filter((client) => months.some((month) => valueOf(client, month, metric)))
       .sort((first, second) => ranking(second) - ranking(first));
 
     const label = (client) => customers[client]?.name || `Cliente ${client}`;
@@ -258,25 +290,27 @@ export const comercial = {
   },
 
   details(context) {
-    const { orphans } = resolvePayments(context);
-    if (!(context.data.payments || []).length) {
-      return {
-        summary: 'Conferência da importação de pagamentos',
-        content: '<p class="muted">Nenhum relatório de pagamentos importado ainda.</p>'
-      };
+    const summary = 'Conferência da importação de recebimentos';
+    if (!(context.data.receipts || []).length) {
+      return { summary, content: '<p class="muted">Nenhum relatório de recebimentos importado ainda.</p>' };
     }
-    if (!orphans.length) {
-      return {
-        summary: 'Conferência da importação de pagamentos',
-        content: '<p class="muted">Todos os pagamentos importados casaram com um cliente do Hub.</p>'
-      };
-    }
-    const total = orphans.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-    const nomes = [...new Set(orphans.map((payment) => payment.client).filter(Boolean))].slice(0, 12);
-    return {
-      summary: `Pagamentos sem cliente correspondente: ${formatNumber(orphans.length)}`,
-      content: `<span class="status-row"><b>Valor fora da matriz</b><strong>${formatCurrency(total)}</strong></span>`
-        + `<p class="muted">Não casaram nem por nid nem por nome: ${nomes.join(', ')}${orphans.length > nomes.length ? '…' : ''}</p>`
-    };
+
+    const { matched, orphans, outOfScope } = resolveReceipts(context);
+    const total = (list) => list.reduce((sum, item) => sum + (item.amount || 0), 0);
+    const parcelas = (count) => `${formatNumber(count)} ${count === 1 ? 'parcela' : 'parcelas'}`;
+    const line = (label, list) => `<span class="status-row"><b>${label} · ${parcelas(list.length)}</b><strong>${formatCurrency(total(list))}</strong></span>`;
+
+    const content = [
+      line(`Na matriz · ${RECEIPT_SCOPE}`, matched),
+      outOfScope.length ? line('Fora do escopo · outros centros de custo', outOfScope) : '',
+      orphans.length ? line('Sem cliente correspondente', orphans) : ''
+    ].join('');
+
+    const nomes = [...new Set(orphans.map((receipt) => receipt.client).filter(Boolean))].slice(0, 12);
+    const nota = orphans.length
+      ? `<p class="muted">Não casaram pelo nome: ${nomes.join(', ')}${orphans.length > nomes.length ? '…' : ''}</p>`
+      : '<p class="muted">Todo recebimento de consultoria casou com um cliente do Hub.</p>';
+
+    return { summary: orphans.length ? `${summary}: ${parcelas(orphans.length)} sem cliente` : summary, content: content + nota };
   }
 };

@@ -1,6 +1,6 @@
 # Pendências
 
-Levantado em 2026-09-10. O lote abaixo fecha a **v1.5.0** (MINOR: muda comportamento
+Levantado em 2026-09-10. O primeiro lote fecha a **v1.5.0** (MINOR: muda comportamento
 sem quebrar o uso existente).
 
 ## Lote v1.5.0
@@ -78,6 +78,39 @@ da API o dashboard parecia travado. Passa a mostrar o mês e a posição
 engrenagem na aba Dados. O painel usa a mesma fonte, para não contar num lugar e
 congelar no outro.
 
+## Lote v1.6.2 → v1.8.0 · Comercial
+
+Levantado em 2026-09-11, a partir de quatro pedidos: recebimento zerado, recebimento
+por hora vazio, contagem de reuniões por cliente e o nome do cliente errado.
+
+**13. Nome do cliente no lugar da razão social** (v1.6.2). A matriz rotulava por
+`companyName`: FEHEROS aparecia como CAMPOS FERREIRA COMERCIO ELETRONICO LTDA. O
+campo "Nome" da tela do cliente é `tradingName` na API — descoberto por eliminação,
+já que ela valida o parâmetro `fields`. Os 950 clientes têm o campo preenchido.
+
+**14. Aba Qtd de reuniões por cliente** (v1.7.0). Mesma contagem de "Reuniões
+realizadas" de Operações, repartida por cliente. O total não bate entre as duas telas
+de propósito: a matriz comercial exige cliente vinculado, e reunião interna não
+pertence a linha nenhuma dela.
+
+**15. Recebimento tinha a fonte errada** (v1.8.0). A matriz lia o `Pagamentos.csv`,
+que é o contas a **pagar**: 778 linhas, 55 entidades que são pessoas e planos de
+conta de salário. Não havia um único cliente ali, e por isso toda linha mostrava
+`R$ 0` — e, por tabela, o recebimento por hora ficava sem numerador. Conferido também
+que a API do Hub não tem endpoint financeiro: 25 nomes de recurso sondados
+(`receipts`, `receivables`, `invoices`, `payments`, `contracts`…), todos 404. O
+recebimento passa a vir do `Recebimentos.csv`, com card de upload e cache próprios, e
+o `Pagamentos.csv` fica só na aba de Custo.
+
+**16. Linhas repetidas no relatório de recebimentos** (v1.8.0). 11 parcelas saem
+duplicadas — a mesma sai até cinco vezes, idêntica nas 23 colunas —, somando R$ 129
+mil a mais. A chave passa a ser o `NID` da parcela. Parcelamento real não se perde:
+cada parcela tem NID próprio, conferido nas 16 faturas parceladas do arquivo.
+
+**17. Abas de R$ vazias avisam o que falta** (v1.8.0). Sem o arquivo importado, elas
+mostravam uma coluna inteira de `R$ 0`, que tem cara de número apurado. Agora dizem
+que o relatório precisa ser importado, e que sincronizar não resolve.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10
@@ -98,8 +131,22 @@ janela completa". Correção provável: a cada sincronização, recarregar sem f
 **Duas das quatro áreas são placeholders.** RH e Financeiro aparecem no menu com
 "Fonte de dados ainda não configurada". Operações e Comercial têm dados.
 
-**Pagamentos continuam entrando à mão.** A API não expõe pagamentos, então a aba de
-Custo depende de subir `Pagamentos.csv` a cada atualização.
+**Abril de 2026 não tem um único recebimento.** Zero parcelas com vencimento em
+04/2026 no relatório exportado, em qualquer centro de custo, e zero finalizações no
+mês. A série pula de mar/2026 (R$ 461.719,66) direto para mai/2026 (R$ 510.997,97), e
+os NIDs #18353 a #18495 não aparecem. As mensalidades de maio foram criadas
+manualmente em 27/04, enquanto as anteriores nasciam do "Sistema" no dia 1º — parece
+mudança de processo na virada. Enquanto não se resolver no Hub, abr/2026 aparece
+`R$ 0` na matriz. **A conferir no Hub, não tem conserto no código.**
+
+**O relatório de recebimentos precisa ser exportado por data de vencimento.** A
+primeira exportação foi filtrada por "finalizada em", e a competência da matriz é o
+vencimento: nesse arranjo, a parcela que vence dentro da janela mas foi baixada fora
+dela não vem no arquivo.
+
+**O financeiro continua entrando à mão.** A API não expõe pagamentos nem
+recebimentos, então Custo e Recebimento dependem de subir os dois CSV a cada
+atualização.
 
 **Supabase está montado e não é usado.** `src/supabase.js` e `supabase/schema.sql`
 existem, mas nenhum arquivo importa o módulo — o estado vive só no IndexedDB, por

@@ -1,7 +1,8 @@
 # Dashboard Conselho Formatar
 
 Dashboard de indicadores operacionais. Reuniões e tarefas vêm da API do Formatar Hub;
-o relatório de pagamentos continua sendo importado manualmente (a API não expõe pagamentos).
+os relatórios de **pagamentos** e **recebimentos** continuam sendo importados
+manualmente, porque a API não expõe nada do financeiro.
 
 ## Desenvolvimento
 
@@ -57,8 +58,8 @@ existe caso especial de virada de ano.
 O que a tela exibe é decidido pela **cobertura**, gravada junto do cache: ela só
 avança quando a fase fecha em *todos* os recursos. Sem isso a tela mostraria
 reuniões cheias e zero tarefas no intervalo entre uma e outra. Pela mesma razão, um
-`Pagamentos.csv` com meses fora da cobertura não estica a linha do tempo — as linhas
-ficam no cache e entram quando a fase correspondente terminar.
+arquivo do financeiro com meses fora da cobertura não estica a linha do tempo — as
+linhas ficam no cache e entram quando a fase correspondente terminar.
 
 Enquanto os dois anos não estiverem cobertos pelos mesmos meses, as colunas de ano
 anterior e de variação não aparecem, e a coluna acumulada é rotulada com o período
@@ -155,13 +156,47 @@ uma reunião de três pessoas soma só quem pertence a ele.
 
 ### Recebimento
 
-Vem do `Pagamentos.csv` importado à mão, e só do que está marcado como pago. Cada
-pagamento é ligado ao cliente **primeiro pelo nid**, que é exato, e o que sobrar
-tenta pelo nome normalizado contra `companyName`. O que não casar aparece no detalhe
-da área, com o valor que ficou de fora — nada é descartado em silêncio.
+Vem do **`Recebimentos.csv`** — o contas a *receber*, importado à mão na engrenagem.
+Não confundir com o `Pagamentos.csv`, que é o contas a *pagar* e alimenta a aba de
+Custo em Operações: lá a "entidade" é fornecedor ou funcionário, não cliente. Até a
+v1.6.1 a matriz comercial lia o arquivo errado, e por isso mostrava `R$ 0` em todas
+as linhas.
+
+| Regra | Valor |
+|---|---|
+| Competência | mês do **Vencimento** — a cobrança pertence ao mês que ela remunera |
+| Valor | **Valor pago**, que já inclui juros e multa |
+| Filtro | só `Status = Pago` e `Centro de custo = Consultoria Empresarial` |
+| Chave de deduplicação | `NID` da parcela |
+| Cliente | pelo nome: `Entidade` → `tradingName`, com `companyName` de reserva |
+
+Três decisões que valem explicação:
+
+**Uma linha por `NID`.** O relatório exportado repete parcelas inteiras — a mesma
+sai duas, três, até cinco vezes, idêntica nas 23 colunas. Somar como veio inflou o
+recebimento em R$ 129 mil na primeira exportação. Parcelamento de verdade não se
+perde nisso, porque cada parcela tem NID próprio: `"1 de 5"` e `"2 de 5"` da mesma
+fatura continuam sendo duas linhas, com vencimentos diferentes.
+
+**Casamento só por nome.** O `NID` do relatório identifica a *parcela*, não o
+cliente — casar por ele encontraria o cliente errado por coincidência de número. A
+coluna `Entidade` traz o Nome do cadastro, e é por isso que a v1.6.2 vinha antes:
+com `tradingName`, 2.651 de 2.658 parcelas casam direto; com `companyName`, 5.
+
+**Só Consultoria Empresarial.** Recrutamento (Formatar RH) e a assinatura de BI
+(Simple) são receita do mesmo cliente, mas as horas desta tela são só de
+consultoria — somar os três distorceria o recebimento por hora de quem contrata RH.
+
+O que fica de fora por qualquer um dos dois motivos — escopo ou cliente não
+encontrado — aparece no detalhe da área com a contagem e o valor. Nada é descartado
+em silêncio.
 
 Como o arquivo do financeiro não tem time nem grupo de usuário, esses dois filtros
 ficam desabilitados nas abas de recebimento: repartir R$ por time seria inventar.
+
+> Ao exportar, filtre por **data de vencimento**, não por "finalizada em". A
+> competência aqui é o vencimento; filtrar pela finalização deixa de fora a parcela
+> que vence dentro da janela mas foi baixada fora dela.
 
 ## Logos
 
@@ -197,4 +232,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.7.0`.
+A versão atual do projeto é `1.8.0`.

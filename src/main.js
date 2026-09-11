@@ -15,8 +15,11 @@ const DATABASE_STORE = 'dashboard-state';
 const COLLAPSE_BREAKPOINT = 1100;
 
 const state = {
-  data: { meetings: [], tasks: [], payments: [], classifications: {}, customers: {}, reference: {} },
-  fileMeta: { payments: { name: '', latest: '', loaded: false } },
+  // `payments` é o contas a pagar, que vira Custo em Operações; `receipts` é o contas
+  // a receber, que vira Recebimento na Comercial. São relatórios diferentes do Hub e
+  // nunca se misturam: entidade de pagamento é fornecedor ou funcionário, não cliente.
+  data: { meetings: [], tasks: [], payments: [], receipts: [], classifications: {}, customers: {}, reference: {} },
+  fileMeta: { payments: { name: '', latest: '', loaded: false }, receipts: { name: '', latest: '', loaded: false } },
   // `coverage` é a faixa de competência realmente carregada de ponta a ponta.
   // Só ela decide o que a tela exibe; linhas fora dela ficam no cache esperando.
   sync: { lastSync: '', running: false, error: '', message: '', coverage: null, phase: null, waitUntil: 0, waitStage: '', fieldsVersion: 0 },
@@ -101,16 +104,25 @@ app.innerHTML = `
         </div>
       </div>
 
-      <h3>Pagamentos</h3>
-      <p class="muted">A API do Hub não expõe pagamentos, então este relatório continua sendo importado manualmente.</p>
+      <h3>Financeiro</h3>
+      <p class="muted">A API do Hub não expõe nada do financeiro, então os dois relatórios continuam sendo importados manualmente. Exporte cada um em <em>parcelas</em>, filtrando por <strong>data de vencimento</strong>.</p>
       <label class="upload-card" id="upload-card-payments">
         <span class="upload-state" aria-label="Aguardando upload">○</span>
         <strong>Pagamentos</strong>
-        <small>CSV ou XLSX</small>
+        <small>contas a pagar · CSV ou XLSX</small>
         <span class="upload-latest">Ainda não importado</span>
         <input id="payment-file" type="file" accept=".xlsx,.xls,.csv" />
       </label>
-      <div class="upload-feedback" id="upload-feedback">Carregue o relatório de pagamentos para preencher a aba de Custo.</div>
+      <div class="upload-feedback" id="upload-feedback">Carregue o relatório de pagamentos para preencher a aba de Custo, em Operações.</div>
+
+      <label class="upload-card" id="upload-card-receipts">
+        <span class="upload-state" aria-label="Aguardando upload">○</span>
+        <strong>Recebimentos</strong>
+        <small>contas a receber · CSV ou XLSX</small>
+        <span class="upload-latest">Ainda não importado</span>
+        <input id="receipt-file" type="file" accept=".xlsx,.xls,.csv" />
+      </label>
+      <div class="upload-feedback" id="receipt-feedback">Carregue o relatório de recebimentos para preencher as abas de Recebimento, na Comercial.</div>
 
       <div class="danger-zone">
         <button id="clear-cache" class="button ghost" type="button">Limpar cache local</button>
@@ -186,6 +198,21 @@ $('#payment-file').addEventListener('change', async (event) => {
     render();
   } catch (error) {
     $('#upload-feedback').textContent = `Não foi possível ler ${file.name}: ${error.message}`;
+  }
+});
+
+$('#receipt-file').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    state.data.receipts = mergeReceipts(normalizeReceiptRows(await readFile(file)));
+    const latest = [...new Set(state.data.receipts.map((item) => item.month).filter(Boolean))].sort().at(-1) || '';
+    state.fileMeta.receipts = { name: file.name, latest, loaded: true };
+    persistState();
+    $('#receipt-feedback').textContent = `${file.name} carregado: ${state.data.receipts.length.toLocaleString('pt-BR')} parcelas válidas para análise.`;
+    render();
+  } catch (error) {
+    $('#receipt-feedback').textContent = `Não foi possível ler ${file.name}: ${error.message}`;
   }
 });
 
@@ -275,6 +302,50 @@ function paymentKey(item) {
 function mergePayments(incoming) {
   const merged = new Map(state.data.payments.map((item) => [paymentKey(item), item]));
   incoming.forEach((item) => merged.set(paymentKey(item), item));
+  return [...merged.values()];
+}
+
+/* Importação de recebimentos ---------------------------------------------- */
+
+/**
+ * A competência de um recebimento é o mês do **vencimento**, não o da baixa: a
+ * cobrança pertence ao mês que ela remunera. O relatório também traz uma data de
+ * finalização na tela de filtro, mas ela não vem como coluna no arquivo exportado.
+ *
+ * `Entidade` é o **Nome** do cliente, e é por ele que a parcela encontra a linha da
+ * matriz — o `NID` daqui identifica a parcela, não o cliente.
+ */
+function normalizeReceiptRows(rows) {
+  return rows.map((row) => {
+    const status = String(value(row, ['Status'])).trim();
+    return {
+      status,
+      nid: String(value(row, ['NID'])).replace(/^#/, '').trim(),
+      client: String(value(row, ['Entidade'])).trim(),
+      month: monthKey(value(row, ['Vencimento'])),
+      account: String(value(row, ['Planos de contas'])).trim(),
+      costCenter: String(value(row, ['Centro de custo'])).trim(),
+      parcel: String(value(row, ['Parcela'])).trim(),
+      paid: status.toLowerCase() === 'pago',
+      amount: normalizeNumber(value(row, ['Valor pago']))
+    };
+  }).filter((item) => item.month);
+}
+
+/**
+ * A chave é o `NID` da parcela porque o relatório repete linhas inteiras: a mesma
+ * parcela sai duas, três, até cinco vezes, idêntica em todas as colunas. Somar como
+ * veio inflaria o recebimento — foram R$ 129 mil a mais na primeira exportação.
+ * Parcelamento de verdade não se perde nisso: cada parcela tem NID próprio, então
+ * "1 de 5" e "2 de 5" da mesma fatura continuam sendo duas linhas.
+ */
+function receiptKey(item) {
+  return item.nid || [item.client, item.month, item.parcel, item.amount].join('|');
+}
+
+function mergeReceipts(incoming) {
+  const merged = new Map(state.data.receipts.map((item) => [receiptKey(item), item]));
+  incoming.forEach((item) => merged.set(receiptKey(item), item));
   return [...merged.values()];
 }
 
@@ -538,8 +609,8 @@ async function runConnectionTest() {
 }
 
 async function clearCache() {
-  state.data = { meetings: [], tasks: [], payments: [], classifications: {}, customers: {}, reference: {} };
-  state.fileMeta.payments = { name: '', latest: '', loaded: false };
+  state.data = { meetings: [], tasks: [], payments: [], receipts: [], classifications: {}, customers: {}, reference: {} };
+  state.fileMeta = { payments: { name: '', latest: '', loaded: false }, receipts: { name: '', latest: '', loaded: false } };
   state.sync = { lastSync: '', running: false, error: '', message: 'Cache local apagado.', coverage: null, phase: null, waitUntil: 0, waitStage: '', fieldsVersion: 0 };
   await persistState();
   render();
@@ -561,6 +632,7 @@ function serializableState() {
     meetings: state.data.meetings,
     tasks: state.data.tasks,
     payments: state.data.payments,
+    receipts: state.data.receipts,
     classifications: state.data.classifications,
     fileMeta: state.fileMeta,
     excludedDates: [...state.excludedDates],
@@ -598,6 +670,7 @@ async function restoreState() {
     state.data.meetings = source.meetings || [];
     state.data.tasks = source.tasks || [];
     state.data.payments = source.payments || [];
+    state.data.receipts = source.receipts || [];
     state.data.classifications = source.classifications || {};
     state.data.customers = source.customers || {};
     state.data.reference = source.reference || {};
@@ -624,6 +697,7 @@ async function restoreState() {
     state.data.meetings = [];
     state.data.tasks = [];
     state.data.payments = [];
+    state.data.receipts = [];
   }
 }
 
@@ -655,18 +729,29 @@ function context() {
     excludedDates: state.excludedDates,
     tab: activeTabs[state.area],
     fieldsReady: state.sync.fieldsVersion >= DATA_FIELDS_VERSION,
+    syncing: state.sync.running,
     filters: state.areaFilters[state.area] || {}
   };
+}
+
+/**
+ * A área pode decidir o aviso de tela vazia em função da aba: uma aba que espera um
+ * arquivo importado não pode ser coberta pelo texto da sincronização, porque
+ * sincronizar com o Hub não vai preenchê-la nunca.
+ */
+function emptyMessageFor(area) {
+  if (typeof area.emptyMessage === 'function') return area.emptyMessage({ ...context(), syncingMessage: syncingMessage() });
+  return state.sync.running && !area.pending ? syncingMessage() : area.emptyMessage;
 }
 
 function availableMonths() {
   const coverage = state.sync.coverage;
   const inCoverage = (month) => !coverage || (month >= coverage.from.slice(0, 7) && month <= coverage.to.slice(0, 7));
 
-  // Recorta pela cobertura, senão um `Pagamentos.csv` com linhas de 2025 traria os
-  // meses de 2025 de volta à tabela durante a primeira fase, exibindo zero em
+  // Recorta pela cobertura, senão um arquivo do financeiro com linhas de 2025 traria
+  // os meses de 2025 de volta à tabela durante a primeira fase, exibindo zero em
   // reuniões e tarefas — número errado com cara de certo.
-  const months = [...new Set([...state.data.meetings, ...state.data.tasks, ...state.data.payments].map((item) => item.month).filter(Boolean))]
+  const months = [...new Set([...state.data.meetings, ...state.data.tasks, ...state.data.payments, ...state.data.receipts].map((item) => item.month).filter(Boolean))]
     .filter(inCoverage)
     .sort();
   if (months.length < 2) return months;
@@ -764,7 +849,7 @@ function renderIndicatorPanel(area, months) {
     table.className = 'indicator-table-wrap empty-state';
     // Enquanto a primeira competência não fecha, mandar "sincronize na engrenagem"
     // é enganoso: a sincronização já está rodando e não há nada a fazer.
-    table.textContent = state.sync.running && !area.pending ? syncingMessage() : area.emptyMessage;
+    table.textContent = emptyMessageFor(area);
     return;
   }
 
@@ -816,19 +901,21 @@ function renderSyncStatus() {
   // O progresso chega a cada página; a tela vazia acompanha sem esperar o `render()`,
   // que só roda quando o mês fecha.
   const table = $('#indicator-table');
-  if (state.sync.running && !currentArea().pending && table?.classList.contains('empty-state')) table.textContent = syncingMessage();
+  if (state.sync.running && !currentArea().pending && table?.classList.contains('empty-state')) table.textContent = emptyMessageFor(currentArea());
 }
 
 function renderUploadStatus() {
-  const meta = state.fileMeta.payments;
-  const card = $('#upload-card-payments');
-  card.classList.toggle('is-loaded', meta.loaded);
-  const stateIcon = card.querySelector('.upload-state');
-  const latest = card.querySelector('.upload-latest');
-  stateIcon.textContent = meta.loaded ? '✓' : '○';
-  stateIcon.setAttribute('aria-label', meta.loaded ? 'Upload concluído' : 'Aguardando upload');
-  latest.textContent = meta.loaded ? (meta.latest ? `Dados mais recentes: ${monthLabel(meta.latest)}` : 'Sem competência válida') : 'Ainda não importado';
-  latest.title = meta.name || '';
+  [['payments', '#upload-card-payments'], ['receipts', '#upload-card-receipts']].forEach(([kind, selector]) => {
+    const meta = state.fileMeta[kind];
+    const card = $(selector);
+    card.classList.toggle('is-loaded', meta.loaded);
+    const stateIcon = card.querySelector('.upload-state');
+    const latest = card.querySelector('.upload-latest');
+    stateIcon.textContent = meta.loaded ? '✓' : '○';
+    stateIcon.setAttribute('aria-label', meta.loaded ? 'Upload concluído' : 'Aguardando upload');
+    latest.textContent = meta.loaded ? (meta.latest ? `Dados mais recentes: ${monthLabel(meta.latest)}` : 'Sem competência válida') : 'Ainda não importado';
+    latest.title = meta.name || '';
+  });
 }
 
 function renderExcludedDates() {
