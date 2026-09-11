@@ -12,7 +12,10 @@ const RATE_FALLBACK_WAIT = 60;
 
 const MEETING_FIELDS = 'id,nid,status,customer,participants,meetingType,startDate,durationInMinutes,updatedAt';
 const TASK_FIELDS = 'id,nid,status,customer,responsible,team,dueDate,durationInMinutes,updatedAt';
-const CUSTOMER_FIELDS = 'id,nid,companyName,classification';
+// `tradingName` é o campo "Nome" da tela do cliente; `companyName` é a razão social.
+// O relatório de recebimentos traz o Nome na coluna Entidade, então é por ele que os
+// dois lados se encontram — a razão social fica só como chave de reserva.
+const CUSTOMER_FIELDS = 'id,nid,companyName,tradingName,classification';
 
 /**
  * Coleções pequenas e estáveis que dão nome e vínculo ao que as atividades guardam
@@ -267,8 +270,10 @@ export async function testConnection() {
 }
 
 /**
- * `customers` traz classificação, nome e nid. O nid é o que permite casar os
- * pagamentos importados à mão com o cliente sem depender de bater o texto do nome.
+ * `customers` traz classificação, nome e nid. O rótulo da matriz é o **Nome**
+ * (`tradingName`) — "FEHEROS", não "CAMPOS FERREIRA COMERCIO ELETRONICO LTDA".
+ * A razão social continua guardada porque alguns relatórios importados à mão a
+ * usam no lugar do nome.
  */
 export async function fetchCustomers({ onProgress } = {}) {
   const onWait = (seconds) => onProgress?.({ stage: 'customers', waitingSeconds: seconds });
@@ -285,7 +290,9 @@ export async function fetchCustomers({ onProgress } = {}) {
     const id = identifier(row);
     if (!id) return;
     classifications[id] = row.classification == null ? '' : String(row.classification).trim();
-    customers[id] = { nid: row.nid == null ? '' : String(row.nid), name: String(row.companyName || '').trim() };
+    const companyName = String(row.companyName || '').trim();
+    const tradingName = String(row.tradingName || '').trim();
+    customers[id] = { nid: row.nid == null ? '' : String(row.nid), name: tradingName || companyName, companyName };
   });
   return { classifications, customers };
 }

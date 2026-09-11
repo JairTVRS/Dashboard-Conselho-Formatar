@@ -26,8 +26,12 @@ function resolvePayments(context) {
   const byName = {};
   Object.entries(customers).forEach(([id, customer]) => {
     if (customer.nid) byNid[String(customer.nid)] = id;
-    const key = nameKey(customer.name);
-    if (key && !byName[key]) byName[key] = id;
+    // O Nome vem primeiro porque é o que os relatórios do financeiro trazem; a razão
+    // social entra depois e só ocupa as chaves que sobraram.
+    [customer.name, customer.companyName].forEach((candidate) => {
+      const key = nameKey(candidate);
+      if (key && !byName[key]) byName[key] = id;
+    });
   });
 
   const matched = [];

@@ -139,6 +139,7 @@ sentido.
 
 | Filtro | Caminho |
 |---|---|
+| Nome do cliente | `customers.tradingName` — o campo **Nome** da tela do cliente. A razão social (`companyName`) fica guardada só como chave de reserva para casar relatórios importados à mão |
 | Classificação | `customers.classification` |
 | Time | `tasks.team` direto; a reunião chega pelo `meetingType`, e um tipo pode pertencer a mais de um time |
 | Grupo de Usuário | responsável e participantes → `users.userGroup` |
@@ -191,4 +192,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.6.1`.
+A versão atual do projeto é `1.6.2`.
