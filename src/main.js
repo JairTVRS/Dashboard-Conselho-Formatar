@@ -946,7 +946,30 @@ function renderIndicatorPanel(area, months) {
     });
   });
 
-  requestAnimationFrame(() => { table.scrollLeft = keepScroll ? previousScroll : table.scrollWidth; });
+  requestAnimationFrame(() => {
+    pinStickyColumns(table.querySelector('table'));
+    table.scrollLeft = keepScroll ? previousScroll : table.scrollWidth;
+  });
+}
+
+/**
+ * As colunas fixas se empilham à esquerda, e cada uma precisa começar onde a anterior
+ * termina. Medir é a única forma que não quebra quando o rótulo muda de tamanho: os
+ * deslocamentos estavam escritos no CSS, calculados para `jan/25 a set/25`, e o
+ * prefixo `média · ` da v1.10.0 alargou as colunas sem mover os pontos de parada —
+ * cada coluna passou a cobrir a anterior e escondia justamente o valor, que fica
+ * encostado à direita da célula.
+ */
+function pinStickyColumns(table) {
+  const header = table?.querySelector('thead tr');
+  if (!header) return;
+  let offset = 0;
+  ['col-label', 'col-previous', 'col-current', 'col-variation'].forEach((column) => {
+    const headCell = header.querySelector(`th.${column}`);
+    if (!headCell) return;
+    table.querySelectorAll(`.${column}`).forEach((cell) => { cell.style.left = `${offset}px`; });
+    offset += headCell.getBoundingClientRect().width;
+  });
 }
 
 /** Ordenação em vigor: a escolhida por clique ou, na falta dela, o padrão da área. */

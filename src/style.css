@@ -224,10 +224,13 @@ h3 { font-size: 15px; }
 .indicator-table tbody td { color: var(--ink); font-weight: 500; }
 .indicator-table tbody tr:nth-child(even) { background: var(--row-alt); }
 .indicator-table tbody tr:hover, .indicator-table tbody tr:nth-child(even):hover { background: var(--row-hover); }
-.indicator-table th.col-label, .indicator-table tbody th { position: sticky; left: 0; z-index: 3; width: 290px; min-width: 290px; }
-.indicator-table th.col-previous, .indicator-table td.col-previous { position: sticky; left: 290px; z-index: 3; width: 132px; min-width: 132px; }
-.indicator-table th.col-current, .indicator-table td.col-current { position: sticky; left: 422px; z-index: 3; width: 132px; min-width: 132px; }
-.indicator-table th.col-variation, .indicator-table td.col-variation { position: sticky; left: 554px; z-index: 3; width: 112px; min-width: 112px; box-shadow: 5px 0 7px -7px var(--ink); }
+/* Os `left` abaixo são só o ponto de partida: `pinStickyColumns()` os recalcula a
+   partir da largura medida de cada coluna, logo depois de montar a tabela. Confiar
+   no número escrito aqui fazia as colunas se cobrirem assim que um rótulo crescia. */
+.indicator-table th.col-label, .indicator-table tbody th { position: sticky; left: 0; z-index: 3; min-width: 290px; }
+.indicator-table th.col-previous, .indicator-table td.col-previous { position: sticky; left: 290px; z-index: 3; min-width: 132px; }
+.indicator-table th.col-current, .indicator-table td.col-current { position: sticky; left: 422px; z-index: 3; min-width: 132px; }
+.indicator-table th.col-variation, .indicator-table td.col-variation { position: sticky; left: 554px; z-index: 3; min-width: 112px; box-shadow: 5px 0 7px -7px var(--ink); }
 /* Sem comparação o acumulado encosta no rótulo e passa a ser a última coluna fixa. */
 .indicator-table.without-comparison th.col-current, .indicator-table.without-comparison td.col-current { left: 290px; box-shadow: 5px 0 7px -7px var(--ink); }
 .indicator-table tbody th, .indicator-table tbody td.col-previous, .indicator-table tbody td.col-current, .indicator-table tbody td.col-variation { background: var(--paper); }
