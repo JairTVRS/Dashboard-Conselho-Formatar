@@ -240,6 +240,22 @@ h3 { font-size: 15px; }
 .indicator-table thead th.is-sortable:hover, .indicator-table thead th.is-sortable:focus-visible { text-decoration: underline; text-underline-offset: 4px; outline: none; }
 .indicator-table thead th.is-sorted { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
 .sort-arrow { margin-left: 6px; font-size: 9px; vertical-align: 1px; }
+/* O cabeçalho do período é o único que ocupa mais de uma linha. Numa linha só ele
+   mandava na largura da coluna — `média · jan/25 a set/25` pedia uns 190px para um
+   valor que ocupa 90 — e cada coluna fixa a mais empurrava os meses para fora da
+   tela. Aqui o texto quebra e quem decide a largura volta a ser o número debaixo. */
+.indicator-table thead th.col-previous, .indicator-table thead th.col-current { vertical-align: bottom; }
+.period-mode { display: block; font-size: 11px; font-weight: 600; opacity: 0.72; }
+.period-range { display: block; max-width: 92px; margin-left: auto; white-space: normal; }
+/* Nessas duas colunas o sublinhado da ordenação vai na linha do período, não no
+   `th`: decoração herdada não se desliga no filho, então aplicá-la em cima riscaria
+   também a palavra "média" — duas linhas sublinhadas viram ruído. */
+.indicator-table thead th.col-previous.is-sortable:hover, .indicator-table thead th.col-current.is-sortable:hover,
+.indicator-table thead th.col-previous.is-sortable:focus-visible, .indicator-table thead th.col-current.is-sortable:focus-visible,
+.indicator-table thead th.col-previous.is-sorted, .indicator-table thead th.col-current.is-sorted { text-decoration: none; }
+.indicator-table thead th.col-previous:hover .period-range, .indicator-table thead th.col-current:hover .period-range,
+.indicator-table thead th.col-previous:focus-visible .period-range, .indicator-table thead th.col-current:focus-visible .period-range { text-decoration: underline; text-underline-offset: 4px; }
+.indicator-table thead th.col-previous.is-sorted .period-range, .indicator-table thead th.col-current.is-sorted .period-range { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
 .indicator-table tbody th { color: var(--ink); text-align: left; font-weight: 500; }
 .indicator-table tbody td { color: var(--ink); font-weight: 500; }
 .indicator-table tbody tr:nth-child(even) { background: var(--row-alt); }
@@ -248,9 +264,9 @@ h3 { font-size: 15px; }
    partir da largura medida de cada coluna, logo depois de montar a tabela. Confiar
    no número escrito aqui fazia as colunas se cobrirem assim que um rótulo crescia. */
 .indicator-table th.col-label, .indicator-table tbody th { position: sticky; left: 0; z-index: 3; min-width: 290px; }
-.indicator-table th.col-previous, .indicator-table td.col-previous { position: sticky; left: 290px; z-index: 3; min-width: 132px; }
-.indicator-table th.col-current, .indicator-table td.col-current { position: sticky; left: 422px; z-index: 3; min-width: 132px; }
-.indicator-table th.col-variation, .indicator-table td.col-variation { position: sticky; left: 554px; z-index: 3; min-width: 112px; box-shadow: 5px 0 7px -7px var(--ink); }
+.indicator-table th.col-previous, .indicator-table td.col-previous { position: sticky; left: 290px; z-index: 3; min-width: 112px; }
+.indicator-table th.col-current, .indicator-table td.col-current { position: sticky; left: 402px; z-index: 3; min-width: 112px; }
+.indicator-table th.col-variation, .indicator-table td.col-variation { position: sticky; left: 514px; z-index: 3; min-width: 112px; box-shadow: 5px 0 7px -7px var(--ink); }
 /* Sem comparação o acumulado encosta no rótulo e passa a ser a última coluna fixa. */
 .indicator-table.without-comparison th.col-current, .indicator-table.without-comparison td.col-current { left: 290px; box-shadow: 5px 0 7px -7px var(--ink); }
 .indicator-table tbody th, .indicator-table tbody td.col-previous, .indicator-table tbody td.col-current, .indicator-table tbody td.col-variation { background: var(--paper); }

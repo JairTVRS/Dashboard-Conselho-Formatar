@@ -168,8 +168,15 @@ recorte da linha do tempo, a segunda é modo de leitura, não seleção.
 ### Coluna de período: média ou soma
 
 O seletor **Coluna de período**, ao lado dos filtros, decide o que as duas colunas de
-período mostram. O padrão é **Média mensal**, e o rótulo avisa (`média · jan/26 a
-set/26`). A escolha vale para as duas áreas e fica guardada no navegador.
+período mostram. O padrão é **Média mensal**, e o rótulo avisa. A escolha vale para as
+duas áreas e fica guardada no navegador.
+
+Esse rótulo vem **empilhado** — `média` numa linha, `jan/26 a set/26` na outra, que
+ainda pode quebrar. A largura de uma coluna é a do maior conteúdo que não quebra,
+então o rótulo numa linha só pedia 202px para mostrar um valor que ocupa 90, e as
+quatro colunas fixas comiam 791px da tela antes do primeiro mês aparecer. Empilhado,
+somam 626px e quem manda na largura volta a ser o número. O cabeçalho fica três linhas
+mais alto, o que é o lado barato da troca.
 
 Em **média**, a regra é uma só para todas as linhas: a média dos meses **com valor**.
 Mês zerado fica fora do divisor porque não é um mês fraco, é um mês em que aquela
@@ -350,4 +357,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.14.0`.
+A versão atual do projeto é `1.14.1`.

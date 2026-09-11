@@ -98,12 +98,22 @@ function sortEntries(entries, sort) {
   });
 }
 
-/** Cabeçalho clicável, com a seta só na coluna que está ordenando. */
-function headCell(className, label, column, sort) {
+/**
+ * Cabeçalho clicável, com a seta só na coluna que está ordenando.
+ *
+ * `label` é sempre o texto puro — vai para o `title` e para a leitura em voz alta.
+ * `content` existe para o cabeçalho que ocupa mais de uma linha: a largura da coluna
+ * é decidida pelo maior conteúdo sem quebra, então um rótulo longo numa linha só
+ * alargava a coluna muito além do número que ela mostra. Ele recebe a seta em vez de
+ * ganhá-la ao lado, senão a seta ficaria fora do bloco que quebra e voltaria a
+ * somar largura à coluna.
+ */
+function headCell(className, label, column, sort, content = null) {
   const active = sort?.column === column;
   const arrow = active ? `<span class="sort-arrow">${sort.direction === 'asc' ? '▲' : '▼'}</span>` : '';
   const ariaSort = active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none';
-  return `<th class="${className} is-sortable${active ? ' is-sorted' : ''}" data-sort-column="${column}" aria-sort="${ariaSort}" tabindex="0" role="button" title="Ordenar por ${label}">${label}${arrow}</th>`;
+  const inner = content ? content(arrow) : `${label}${arrow}`;
+  return `<th class="${className} is-sortable${active ? ' is-sorted' : ''}" data-sort-column="${column}" aria-sort="${ariaSort}" tabindex="0" role="button" title="Ordenar por ${label}">${inner}</th>`;
 }
 
 /**
@@ -114,12 +124,19 @@ function headCell(className, label, column, sort) {
 export function tableMarkup(rows, visibleMonths, labelHeader = 'Indicador', { sort = null, periodMode = 'sum' } = {}) {
   const comparison = comparisonPeriod(visibleMonths);
   // O rótulo diz o que a coluna contém, senão média e soma ficam indistinguíveis
-  // para quem chega na tela sem ter mexido no seletor.
+  // para quem chega na tela sem ter mexido no seletor. Na tela ele vem empilhado —
+  // o modo numa linha, o período na outra, que ainda pode quebrar — para a coluna
+  // ficar do tamanho do valor em vez do tamanho da frase.
   const periodLabel = (label) => (periodMode === 'average' ? `média · ${label}` : label);
-  const previousHead = comparison.comparable ? headCell('col-previous', periodLabel(comparison.previousLabel), 'previous', sort) : '';
+  const periodHead = (label) => (arrow) => {
+    const range = `<span class="period-range">${label}${arrow}</span>`;
+    return periodMode === 'average' ? `<span class="period-mode">média</span>${range}` : range;
+  };
+  const periodCell = (className, label, column) => headCell(className, periodLabel(label), column, sort, periodHead(label));
+  const previousHead = comparison.comparable ? periodCell('col-previous', comparison.previousLabel, 'previous') : '';
   const variationHead = comparison.comparable ? headCell('col-variation', 'Variação', 'variation', sort) : '';
   const monthHeads = visibleMonths.map((month) => headCell('col-month', monthLabel(month), month, sort)).join('');
-  const head = `<thead><tr>${headCell('col-label', labelHeader, 'label', sort)}${previousHead}${headCell('col-current', periodLabel(comparison.currentLabel), 'current', sort)}${variationHead}${monthHeads}</tr></thead>`;
+  const head = `<thead><tr>${headCell('col-label', labelHeader, 'label', sort)}${previousHead}${periodCell('col-current', comparison.currentLabel, 'current')}${variationHead}${monthHeads}</tr></thead>`;
 
   const entries = rows.map((row) => {
     const current = accumulated(row, comparison.currentMonths, comparison.endMonth, periodMode);
