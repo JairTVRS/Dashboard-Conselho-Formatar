@@ -189,9 +189,29 @@ h3 { font-size: 15px; }
 .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: end; gap: 13px; margin: 20px 0; }
 .filters:empty { display: none; }
 .filter-block { display: grid; gap: 7px; }
-.filter-block label { font-size: 12px; font-weight: 700; color: var(--muted); }
+.filter-block label, .filter-label { font-size: 12px; font-weight: 700; color: var(--muted); }
 .filter-block select, .date-row input { border: 1px solid var(--line); background: var(--paper); color: var(--ink); min-height: 43px; border-radius: 7px; padding: 0 12px; }
 .filter-block select:disabled { opacity: .55; }
+
+/* Campo de múltipla escolha: as seleções viram tags dentro do próprio controle, e a
+   lista abre por cima da tabela. `align-items: end` na grade dos filtros mantém os
+   campos alinhados por baixo mesmo quando as tags empurram um deles para cima. */
+.multiselect { position: relative; }
+.multiselect-control { display: flex; align-items: center; gap: 8px; min-height: 43px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+.multiselect-control:focus-visible { outline: 2px solid var(--orange); outline-offset: 1px; }
+.multiselect.is-open .multiselect-control { border-color: var(--orange); }
+.multiselect.is-disabled .multiselect-control { opacity: .55; cursor: not-allowed; }
+.multiselect-value { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; min-width: 0; }
+.multiselect-placeholder { color: var(--muted); }
+.multiselect-caret { color: var(--muted); font-size: 10px; }
+.multiselect .tag { display: inline-flex; align-items: center; gap: 4px; background: var(--chip); border-radius: 5px; padding: 3px 4px 3px 8px; font-size: 12px; font-weight: 700; }
+.multiselect .tag button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; line-height: 1; padding: 0 3px; border-radius: 4px; }
+.multiselect .tag button:hover { color: var(--orange); }
+.multiselect-menu { position: absolute; z-index: 20; top: calc(100% + 5px); left: 0; right: 0; max-height: 264px; overflow-y: auto; padding: 5px; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); box-shadow: 0 14px 30px var(--shadow); }
+.multiselect-option { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 5px; font-size: 13px; font-weight: 500; cursor: pointer; }
+.multiselect-option:hover { background: var(--row-hover); }
+.multiselect-option input { accent-color: var(--orange); width: 15px; height: 15px; }
+.multiselect-empty { margin: 0; padding: 9px; color: var(--muted); font-size: 12px; }
 
 .indicator-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 26px 0 14px; }
 .indicator-tab { border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); cursor: pointer; padding: 12px 18px; font-family: 'Urbane Rounded', sans-serif; font-weight: 600; }

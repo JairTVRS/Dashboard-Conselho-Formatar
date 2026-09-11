@@ -153,6 +153,16 @@ aparecia com média de R$ 307.865 (quatro parcelas de ~R$ 770 empilhadas num mê
 multiplicadas por 100) quando o certo é R$ 770. Cada arquivo passa a guardar a versão
 do leitor, e versão antiga acende aviso no card e no badge.
 
+**24. Colunas fixas se cobriam e escondiam os valores** (v1.12.1). Os deslocamentos
+das quatro colunas fixas estavam escritos no CSS, calculados para `jan/25 a set/25`.
+O prefixo `média · ` da v1.10.0 alargou as colunas sem mover os pontos de parada, e
+cada uma passou a avançar por cima da anterior — sumia o valor, que fica encostado à
+direita da célula. Na tela parecia dado faltando. Agora os deslocamentos são medidos
+depois de montar a tabela.
+
+**25. Filtros de recorte aceitam mais de uma escolha** (v1.13.0), com as seleções
+como tags removíveis dentro do campo. Nada marcado continua significando tudo.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10

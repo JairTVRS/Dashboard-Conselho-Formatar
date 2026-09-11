@@ -59,14 +59,18 @@ function teamsOf(item, reference) {
   return reference.meetingTypeTeams?.[item.meetingType] || [];
 }
 
+/** Nada escolhido é "tudo": é como o filtro começa e é o que o campo mostra. */
+const chosen = (selected, value) => !selected.length || selected.includes(value);
+
 /** Filtros ativos, já considerando que as visões de recebimento ignoram time e grupo. */
 function activeFilters(context, tab) {
   const filters = context.filters || {};
   const revenue = REVENUE_VIEWS.has(tab);
+  const list = (value) => (Array.isArray(value) ? value : []);
   return {
-    classification: filters.classification || 'all',
-    team: revenue ? 'all' : (filters.team || 'all'),
-    userGroup: revenue ? 'all' : (filters.userGroup || 'all')
+    classification: list(filters.classification),
+    team: revenue ? [] : list(filters.team),
+    userGroup: revenue ? [] : list(filters.userGroup)
   };
 }
 
@@ -81,9 +85,9 @@ function selects(context, tab) {
 
   return (item) => {
     if (item.status !== 'Finalizado' || !item.month || !item.client) return false;
-    if (classification !== 'all' && item.classification !== classification) return false;
-    if (team !== 'all' && !teamsOf(item, reference).includes(team)) return false;
-    if (userGroup !== 'all' && !item.people.some((person) => reference.userGroupOf?.[person] === userGroup)) return false;
+    if (!chosen(classification, item.classification)) return false;
+    if (team.length && !teamsOf(item, reference).some((id) => team.includes(id))) return false;
+    if (userGroup.length && !item.people.some((person) => userGroup.includes(reference.userGroupOf?.[person]))) return false;
     return true;
   };
 }
@@ -95,9 +99,9 @@ function selects(context, tab) {
  */
 function peopleIn(item, context, tab) {
   const { userGroup } = activeFilters(context, tab);
-  if (userGroup === 'all') return item.people.length;
+  if (!userGroup.length) return item.people.length;
   const reference = context.data.reference || {};
-  return item.people.filter((person) => reference.userGroupOf?.[person] === userGroup).length;
+  return item.people.filter((person) => userGroup.includes(reference.userGroupOf?.[person])).length;
 }
 
 function buildIndex(context, tab) {
@@ -128,7 +132,7 @@ function buildIndex(context, tab) {
   const { matched } = resolveReceipts(context);
   const { classification } = activeFilters(context, tab);
   matched.forEach((receipt) => {
-    if (classification !== 'all' && (context.data.classifications?.[receipt.client] || '') !== classification) return;
+    if (!chosen(classification, context.data.classifications?.[receipt.client] || '')) return;
     cell(receipt.client, receipt.month).revenue += receipt.amount || 0;
   });
 
@@ -171,7 +175,7 @@ export const comercial = {
   // implícito no ranking das linhas, acende a seta no cabeçalho: sem ela não dá para
   // saber por qual coluna a tabela está ordenada nem que basta clicar para inverter.
   defaultSort: { column: 'current', direction: 'desc' },
-  defaultFilters: { classification: 'all', team: 'all', userGroup: 'all' },
+  defaultFilters: { classification: [], team: [], userGroup: [] },
 
   filters(context) {
     const revenue = REVENUE_VIEWS.has(context.tab);
@@ -191,24 +195,27 @@ export const comercial = {
       {
         id: 'classification',
         label: 'Classificação',
+        placeholder: 'Todas as classificações',
         disabled: classifications.length === 0,
-        options: [{ value: 'all', label: 'Todas as classificações' }, ...classifications.map((item) => ({ value: item, label: String(item) }))]
+        options: classifications.map((item) => ({ value: item, label: String(item) }))
       },
       {
-        // Sem opção além de "todos", o filtro se reseta sozinho ao entrar numa aba
-        // de recebimento — e o rótulo diz por quê.
+        // Sem opção nenhuma, o filtro se esvazia sozinho ao entrar numa aba de
+        // recebimento — e o rótulo diz por quê.
         id: 'team',
         // Enquanto a passada de enriquecimento não termina, parte das linhas em cache
         // ainda não tem o vínculo com o time e o filtro sub-reporta.
         label: revenue ? 'Time · não se aplica a recebimento' : (context.fieldsReady ? 'Time' : 'Time · atualizando, resultado parcial'),
+        placeholder: 'Todos os times',
         disabled: revenue || teams.length === 0,
-        options: revenue ? [{ value: 'all', label: 'Todos os times' }] : [{ value: 'all', label: 'Todos os times' }, ...teams]
+        options: revenue ? [] : teams
       },
       {
         id: 'userGroup',
         label: revenue ? 'Grupo de Usuário · não se aplica a recebimento' : 'Grupo de Usuário',
+        placeholder: 'Todos os grupos',
         disabled: revenue || groups.length === 0,
-        options: revenue ? [{ value: 'all', label: 'Todos os grupos' }] : [{ value: 'all', label: 'Todos os grupos' }, ...groups]
+        options: revenue ? [] : groups
       }
     ];
   },

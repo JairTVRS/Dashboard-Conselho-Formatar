@@ -130,6 +130,23 @@ e apenas os recursos `meetings`, `tasks` e `customers`.
 
 ## Leitura das tabelas
 
+### Filtros de recorte
+
+Classificação, Time e Grupo de Usuário na Comercial, e Visão e Classificação do
+cliente em Operações, aceitam **mais de uma escolha**. Cada seleção vira uma tag
+removível dentro do próprio campo, e a lista abre com caixas de seleção.
+
+**Nada marcado significa tudo** — o campo mostra "Todas as classificações" em vez de
+ficar vazio, que pareceria filtro zerando a tabela. Filtros diferentes se somam: com
+classificação 1 e time B marcados, entra só o que é 1 **e** do time B.
+
+Uma escolha que deixa de existir nas opções é descartada: o filtro de Time fica sem
+opção nenhuma nas abas de recebimento, e uma seleção órfã continuaria recortando a
+tabela sem aparecer em lugar nenhum.
+
+**Competência** e **Coluna de período** seguem de escolha única: a primeira define o
+recorte da linha do tempo, a segunda é modo de leitura, não seleção.
+
 ### Coluna de período: média ou soma
 
 O seletor **Coluna de período**, ao lado dos filtros, decide o que as duas colunas de
@@ -314,4 +331,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.12.1`.
+A versão atual do projeto é `1.13.0`.

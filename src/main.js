@@ -41,6 +41,9 @@ const state = {
   // períodos de atividade diferentes, que é a regra num carteira que entra e sai.
   periodMode: 'average',
   areaFilters: {},
+  // Filtro com a lista aberta, se houver. Vive no estado para sobreviver ao
+  // `render()` que cada marcação dispara — senão a lista fecharia a cada clique.
+  openFilter: null,
   // Ordenação escolhida por clique no cabeçalho, por área. Vazio significa a ordem
   // natural da área — em Comercial, o ranking do ano corrente; em Operações, a
   // sequência de leitura dos indicadores, que não é alfabética nem numérica.
@@ -242,7 +245,17 @@ $('#data-status-button').addEventListener('click', () => {
 });
 $('#close-settings').addEventListener('click', () => toggleDrawer(false));
 $('#drawer-backdrop').addEventListener('click', () => toggleDrawer(false));
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape') toggleDrawer(false); });
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  toggleDrawer(false);
+  if (state.openFilter) { state.openFilter = null; render(); }
+});
+
+// Clique fora fecha a lista aberta. O próprio campo interrompe a propagação, então
+// só chega aqui o que é mesmo de fora.
+document.addEventListener('click', () => {
+  if (state.openFilter) { state.openFilter = null; render(); }
+});
 
 document.querySelectorAll('[data-drawer-tab]').forEach((button) => button.addEventListener('click', () => {
   document.querySelectorAll('[data-drawer-tab]').forEach((tab) => tab.classList.toggle('is-active', tab === button));
@@ -843,6 +856,32 @@ function renderSidebar() {
   });
 }
 
+/**
+ * Campo de múltipla escolha com as seleções como tags dentro do próprio controle.
+ * Nada marcado significa tudo, e é o que o texto de espera diz — "Todos os times" em
+ * vez de campo vazio, que pareceria filtro zerando a tabela.
+ *
+ * O controle é uma `div` com papel de botão, não um `<button>`: cada tag carrega o
+ * seu próprio botão de remover, e botão dentro de botão é HTML inválido.
+ */
+function multiselectMarkup(filter, selected) {
+  const labelOf = (value) => filter.options.find((option) => String(option.value) === String(value))?.label ?? value;
+  const tags = selected.map((value) => `<span class="tag">${labelOf(value)}<button type="button" data-remove="${value}" aria-label="Remover ${labelOf(value)}">×</button></span>`).join('');
+  const options = filter.options.map((option) => {
+    const checked = selected.some((value) => String(value) === String(option.value));
+    return `<label class="multiselect-option"><input type="checkbox" value="${option.value}"${checked ? ' checked' : ''} />${option.label}</label>`;
+  }).join('');
+
+  const open = state.openFilter === filter.id && !filter.disabled;
+  return `<div class="multiselect${filter.disabled ? ' is-disabled' : ''}${open ? ' is-open' : ''}" data-filter="${filter.id}">
+      <div class="multiselect-control" role="button" tabindex="${filter.disabled ? -1 : 0}" aria-haspopup="listbox" aria-expanded="${open}">
+        <span class="multiselect-value">${tags || `<span class="multiselect-placeholder">${filter.placeholder}</span>`}</span>
+        <span class="multiselect-caret" aria-hidden="true">▾</span>
+      </div>
+      <div class="multiselect-menu" role="listbox" aria-multiselectable="true"${open ? '' : ' hidden'}>${options || '<p class="multiselect-empty">Nada para escolher aqui.</p>'}</div>
+    </div>`;
+}
+
 function renderFilters(area, months) {
   const container = $('#filters');
   const areaFilters = area.filters(context());
@@ -854,22 +893,43 @@ function renderFilters(area, months) {
 
   const periodBlock = area.pending ? '' : `<div class="filter-block"><label for="period-mode">Coluna de período</label><select id="period-mode"><option value="average">Média mensal</option><option value="sum">Soma do período</option></select></div>`;
 
+  // O valor guardado é limpo contra as opções que existem agora: o filtro de Time
+  // fica sem opção nenhuma nas abas de recebimento, e uma escolha órfã continuaria
+  // recortando a tabela sem aparecer em lugar nenhum.
+  areaFilters.forEach((filter) => {
+    const values = filter.options.map((option) => String(option.value));
+    stored[filter.id] = (Array.isArray(stored[filter.id]) ? stored[filter.id] : []).filter((value) => values.includes(String(value)));
+  });
+
   container.innerHTML = `
-    ${areaFilters.map((filter) => `<div class="filter-block"><label for="filter-${filter.id}">${filter.label}</label><select id="filter-${filter.id}" data-filter="${filter.id}"${filter.disabled ? ' disabled' : ''}>${filter.options.map((option) => `<option value="${option.value}">${option.label}</option>`).join('')}</select></div>`).join('')}
+    ${areaFilters.map((filter) => `<div class="filter-block"><span class="filter-label">${filter.label}</span>${multiselectMarkup(filter, stored[filter.id])}</div>`).join('')}
     <div class="filter-block"><label for="month">Competência</label><select id="month">${monthOptions}</select></div>
     ${periodBlock}
   `;
 
-  areaFilters.forEach((filter) => {
-    const select = container.querySelector(`[data-filter="${filter.id}"]`);
-    const values = filter.options.map((option) => String(option.value));
-    const current = values.includes(String(stored[filter.id])) ? stored[filter.id] : filter.options[0]?.value;
-    select.value = current;
-    stored[filter.id] = current;
-    select.addEventListener('change', (event) => {
-      state.areaFilters[area.id][filter.id] = event.target.value;
-      render();
+  container.querySelectorAll('.multiselect').forEach((box) => {
+    const id = box.dataset.filter;
+    // Clique dentro do campo não fecha o campo: a lista existe para marcar várias
+    // coisas em sequência, e fechar a cada marcação obrigaria a reabrir toda vez.
+    box.addEventListener('click', (event) => event.stopPropagation());
+
+    const control = box.querySelector('.multiselect-control');
+    const toggle = () => { state.openFilter = state.openFilter === id ? null : id; render(); };
+    control.addEventListener('click', toggle);
+    control.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); }
     });
+
+    box.querySelectorAll('.multiselect-option input').forEach((input) => input.addEventListener('change', () => {
+      const current = stored[id] || [];
+      stored[id] = input.checked ? [...current, input.value] : current.filter((value) => String(value) !== input.value);
+      render();
+    }));
+
+    box.querySelectorAll('[data-remove]').forEach((button) => button.addEventListener('click', () => {
+      stored[id] = (stored[id] || []).filter((value) => String(value) !== button.dataset.remove);
+      render();
+    }));
   });
 
   const monthSelect = container.querySelector('#month');

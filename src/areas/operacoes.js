@@ -53,10 +53,13 @@ function distinctActivities(items) {
   });
 }
 
+/** Nada escolhido é "tudo": é como o filtro começa e é o que o campo mostra. */
+const chosen = (selected, value) => !selected?.length || selected.includes(value);
+
 function filteredData(context, kind) {
   const { data, month, filters } = context;
   const source = data[kind].filter((item) => item.month && (kind !== 'payments' ? item.status === 'Finalizado' : item.paid));
-  return source.filter((item) => (kind === 'payments' || filters.classification === 'all' || item.classification === filters.classification) && (month === 'all' || item.month === month));
+  return source.filter((item) => (kind === 'payments' || chosen(filters.classification, item.classification)) && (month === 'all' || item.month === month));
 }
 
 function metricsFor(context, month) {
@@ -64,8 +67,10 @@ function metricsFor(context, month) {
   const meetings = filteredData(context, 'meetings').filter((item) => item.month === month);
   const tasks = filteredData(context, 'tasks').filter((item) => item.month === month);
   const payments = filteredData(context, 'payments').filter((item) => item.month === month);
-  const selectedMeetings = filters.segment === 'internal' ? [] : distinctActivities(meetings);
-  const selectedTasks = filters.segment === 'external' ? [] : distinctActivities(tasks);
+  // A reunião é o trabalho voltado para fora e a tarefa o de dentro, então a Visão
+  // escolhe qual dos dois entra. Com as duas marcadas, ou nenhuma, entram as duas.
+  const selectedMeetings = chosen(filters.segment, 'external') ? distinctActivities(meetings) : [];
+  const selectedTasks = chosen(filters.segment, 'internal') ? distinctActivities(tasks) : [];
   const activities = [...selectedMeetings, ...selectedTasks];
   const capacity = workingHours(month, excludedDates);
   const minutes = activities.reduce((sum, item) => sum + item.minutes, 0);
@@ -113,7 +118,7 @@ export const operacoes = {
     { id: 'quality', label: 'Qualidade' }
   ],
 
-  defaultFilters: { segment: 'all', classification: 'all' },
+  defaultFilters: { segment: [], classification: [] },
 
   filters(context) {
     const classifications = [...new Set([...context.data.meetings, ...context.data.tasks].map((item) => item.classification).filter(Boolean))]
@@ -122,8 +127,8 @@ export const operacoes = {
       {
         id: 'segment',
         label: 'Visão',
+        placeholder: 'Todas',
         options: [
-          { value: 'all', label: 'Todas' },
           { value: 'internal', label: 'Internos' },
           { value: 'external', label: 'Externos' }
         ]
@@ -131,11 +136,9 @@ export const operacoes = {
       {
         id: 'classification',
         label: 'Classificação do cliente',
+        placeholder: 'Todas as classificações',
         disabled: classifications.length === 0,
-        options: [
-          { value: 'all', label: 'Todas as classificações' },
-          ...classifications.map((item) => ({ value: item, label: String(item) }))
-        ]
+        options: classifications.map((item) => ({ value: item, label: String(item) }))
       }
     ];
   },
