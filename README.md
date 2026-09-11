@@ -154,9 +154,19 @@ Em **soma**, cada linha volta a agregar do seu jeito: contagens de distintos usa
 
 Todo cabeçalho ordena por clique, em Operações e na Comercial. O primeiro clique
 numa coluna de número traz do **maior para o menor**, que é o que se quer olhar; na
-coluna de rótulo, de A a Z. O clique seguinte inverte, e o terceiro volta à ordem
-natural da área — o ranking do ano corrente na Comercial, a sequência de leitura dos
-indicadores em Operações, que não é alfabética nem numérica.
+coluna de rótulo, de A a Z. O clique seguinte inverte, e o terceiro volta à ordenação
+padrão da área.
+
+A **Comercial já nasce ordenada** pela coluna de período do ano corrente, maior
+primeiro, com a seta acesa no cabeçalho — é como o relatório modelo se lê, e a seta é
+o que revela por onde a tabela está ordenada e que basta clicar para inverter. Como o
+padrão é essa coluna, o ciclo de cliques nela fica em maior↔menor, sem um terceiro
+estado morto.
+
+**Operações não tem ordenação padrão**: ali as linhas são indicadores numa sequência
+de leitura — atividades, reuniões, tarefas, horas — que não é alfabética nem numérica
+e se perderia se a tela abrisse ordenada por valor. O terceiro clique devolve essa
+sequência.
 
 Linhas sem valor comparável — a variação de quem não tinha movimento no ano anterior
 — vão para o fim nos dois sentidos: elas não são as menores, são as que não têm
@@ -296,4 +306,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.10.1`.
+A versão atual do projeto é `1.11.0`.

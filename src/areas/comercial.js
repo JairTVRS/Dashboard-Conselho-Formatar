@@ -166,6 +166,11 @@ export const comercial = {
   ],
 
   labelHeader: 'Cliente',
+  // A matriz nasce ordenada pela coluna de período do ano corrente, maior primeiro —
+  // é como o relatório modelo se lê. Declarar isso como ordenação, em vez de deixar
+  // implícito no ranking das linhas, acende a seta no cabeçalho: sem ela não dá para
+  // saber por qual coluna a tabela está ordenada nem que basta clicar para inverter.
+  defaultSort: { column: 'current', direction: 'desc' },
   defaultFilters: { classification: 'all', team: 'all', userGroup: 'all' },
 
   filters(context) {
