@@ -129,11 +129,16 @@ e apenas os recursos `meetings`, `tasks` e `customers`.
 
 ## Área Comercial
 
-Matriz de cliente por mês, alimentada pelas atividades **finalizadas**, com quatro
-visões em abas: tempo de duração (em `HH:MM`), quantidade de participantes,
-recebimento e recebimento por hora. As colunas de período somam, exceto recebimento
-por hora, que é a **razão dos totais** — somar razões mensais daria um número sem
-sentido.
+Matriz de cliente por mês, alimentada pelas atividades **finalizadas**, com cinco
+visões em abas: tempo de duração (em `HH:MM`), quantidade de reuniões, quantidade de
+participantes, recebimento e recebimento por hora. As colunas de período somam,
+exceto recebimento por hora, que é a **razão dos totais** — somar razões mensais
+daria um número sem sentido.
+
+A aba de quantidade de reuniões conta a mesma coisa que "Reuniões realizadas" em
+Operações, mas repartida por cliente — e por isso o total das duas telas **não
+bate**: a matriz comercial só conta atividade com cliente vinculado, e a reunião
+interna não pertence a linha nenhuma daqui.
 
 ### De onde vem cada vínculo
 
@@ -192,4 +197,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.6.2`.
+A versão atual do projeto é `1.7.0`.

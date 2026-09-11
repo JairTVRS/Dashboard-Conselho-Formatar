@@ -61,17 +61,22 @@ function activeFilters(context, tab) {
   };
 }
 
-function selectedActivities(context, tab) {
+/**
+ * Uma atividade entra na matriz quando está finalizada, tem competência, tem cliente
+ * e passa pelos filtros ativos. Exigir cliente é o que separa esta área de Operações:
+ * reunião interna não pertence a linha nenhuma da matriz.
+ */
+function selects(context, tab) {
   const reference = context.data.reference || {};
   const { classification, team, userGroup } = activeFilters(context, tab);
 
-  return [...context.data.meetings, ...context.data.tasks].filter((item) => {
+  return (item) => {
     if (item.status !== 'Finalizado' || !item.month || !item.client) return false;
     if (classification !== 'all' && item.classification !== classification) return false;
     if (team !== 'all' && !teamsOf(item, reference).includes(team)) return false;
     if (userGroup !== 'all' && !item.people.some((person) => reference.userGroupOf?.[person] === userGroup)) return false;
     return true;
-  });
+  };
 }
 
 /**
@@ -91,11 +96,21 @@ function buildIndex(context, tab) {
   const cell = (client, month) => {
     if (!index.has(client)) index.set(client, new Map());
     const months = index.get(client);
-    if (!months.has(month)) months.set(month, { hours: 0, people: 0, revenue: 0 });
+    if (!months.has(month)) months.set(month, { hours: 0, people: 0, meetings: 0, revenue: 0 });
     return months.get(month);
   };
 
-  selectedActivities(context, tab).forEach((item) => {
+  const selected = selects(context, tab);
+  // Reuniões e tarefas somam juntas em duração e participantes, mas só a reunião
+  // conta na aba de quantidade — por isso os dois laços em vez de um só.
+  context.data.meetings.filter(selected).forEach((item) => {
+    const entry = cell(item.client, item.month);
+    entry.hours += (item.minutes || 0) / 60;
+    entry.people += peopleIn(item, context, tab);
+    entry.meetings += 1;
+  });
+
+  context.data.tasks.filter(selected).forEach((item) => {
     const entry = cell(item.client, item.month);
     entry.hours += (item.minutes || 0) / 60;
     entry.people += peopleIn(item, context, tab);
@@ -117,11 +132,12 @@ export const comercial = {
   label: 'Comercial',
   icon: ICON,
   title: 'Indicadores Comerciais',
-  subtitle: 'Matriz mensal por cliente de duração, participantes e recebimento das atividades finalizadas.',
+  subtitle: 'Matriz mensal por cliente de duração, reuniões, participantes e recebimento das atividades finalizadas.',
   eyebrow: 'CONSELHO FORMATAR / GESTÃO',
 
   tabs: [
     { id: 'duration', label: 'Tempo de duração' },
+    { id: 'meetings', label: 'Qtd de reuniões' },
     { id: 'people', label: 'Qtd de participantes' },
     { id: 'revenue', label: 'Recebimento' },
     { id: 'revenuePerHour', label: 'Recebimento por hora' }
@@ -189,13 +205,14 @@ export const comercial = {
       }
       if (tab === 'revenue') return sumOver(client, currentMonths, 'revenue');
       if (tab === 'people') return sumOver(client, currentMonths, 'people');
+      if (tab === 'meetings') return sumOver(client, currentMonths, 'meetings');
       return sumOver(client, currentMonths, 'hours');
     };
 
     const clients = [...index.keys()]
       .filter((client) => months.some((month) => {
         const entry = index.get(client)?.get(month);
-        return entry && (entry.hours || entry.people || entry.revenue);
+        return entry && (entry.hours || entry.people || entry.meetings || entry.revenue);
       }))
       .sort((first, second) => ranking(second) - ranking(first));
 
@@ -205,6 +222,12 @@ export const comercial = {
       label: label(client),
       value: (month) => valueOf(client, month, 'hours'),
       format: formatClock
+    }));
+
+    if (tab === 'meetings') return clients.map((client) => ({
+      label: label(client),
+      value: (month) => valueOf(client, month, 'meetings'),
+      format: (value) => formatNumber(value)
     }));
 
     if (tab === 'people') return clients.map((client) => ({
