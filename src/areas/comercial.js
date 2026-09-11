@@ -230,17 +230,24 @@ export const comercial = {
     const sumOver = (client, range, field) => range.reduce((total, month) => total + valueOf(client, month, field), 0);
 
     // Ordenação pela coluna do ano corrente, maior primeiro, como no relatório modelo.
+    // Ela segue o modo escolhido: com a coluna mostrando média, ordenar por soma
+    // deixaria a primeira linha da tabela menor que a segunda.
     const currentYear = months.length ? months[months.length - 1].split('-')[0] : '';
     const currentMonths = months.filter((month) => month.startsWith(currentYear));
+    const overRange = (client, range, field) => {
+      if (context.periodMode !== 'average') return sumOver(client, range, field);
+      const values = range.map((month) => valueOf(client, month, field)).filter((value) => value !== 0);
+      return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+    };
     const ranking = (client) => {
       if (tab === 'revenuePerHour') {
-        const hours = sumOver(client, currentMonths, 'hours');
-        return hours ? sumOver(client, currentMonths, 'revenue') / hours : 0;
+        const hours = overRange(client, currentMonths, 'hours');
+        return hours ? overRange(client, currentMonths, 'revenue') / hours : 0;
       }
-      if (tab === 'revenue') return sumOver(client, currentMonths, 'revenue');
-      if (tab === 'people') return sumOver(client, currentMonths, 'people');
-      if (tab === 'meetings') return sumOver(client, currentMonths, 'meetings');
-      return sumOver(client, currentMonths, 'hours');
+      if (tab === 'revenue') return overRange(client, currentMonths, 'revenue');
+      if (tab === 'people') return overRange(client, currentMonths, 'people');
+      if (tab === 'meetings') return overRange(client, currentMonths, 'meetings');
+      return overRange(client, currentMonths, 'hours');
     };
 
     const metric = TAB_METRIC[tab] || 'hours';

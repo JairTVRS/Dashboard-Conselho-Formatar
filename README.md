@@ -130,6 +130,26 @@ e apenas os recursos `meetings`, `tasks` e `customers`.
 
 ## Leitura das tabelas
 
+### Coluna de período: média ou soma
+
+O seletor **Coluna de período**, ao lado dos filtros, decide o que as duas colunas de
+período mostram. O padrão é **Média mensal**, e o rótulo avisa (`média · jan/26 a
+set/26`). A escolha vale para as duas áreas e fica guardada no navegador.
+
+Em **média**, a regra é uma só para todas as linhas: a média dos meses **com valor**.
+Mês zerado fica fora do divisor porque não é um mês fraco, é um mês em que aquela
+linha não existia. BENE PISCINAS recebeu R$ 3.950 uma única vez, em jul/2026: a média
+é R$ 3.950, não R$ 439. Já SÉCULO XXI, com movimento em 7 dos 9 meses, soma R$ 9.000
+e tem média de R$ 1.286.
+
+É por isso que a média é o padrão: o acumulado distorce a comparação entre anos
+sempre que os dois lados cobrem períodos de atividade diferentes — o que é a regra
+numa carteira em que cliente entra e sai.
+
+Em **soma**, cada linha volta a agregar do seu jeito: contagens de distintos usam
+`total(months)` e contam o distinto do período inteiro; percentuais e razões usam
+`aggregate: 'average'`; o resto soma.
+
 ### Ordenação
 
 Todo cabeçalho ordena por clique, em Operações e na Comercial. O primeiro clique
@@ -276,4 +296,4 @@ Este projeto segue Versionamento Semântico no formato `MAJOR.MINOR.PATCH` (`X.Y
 - `MINOR`: funcionalidade nova compatível com o uso existente.
 - `PATCH`: correção compatível ou ajuste pequeno.
 
-A versão atual do projeto é `1.9.0`.
+A versão atual do projeto é `1.10.0`.

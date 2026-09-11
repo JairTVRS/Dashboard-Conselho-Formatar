@@ -111,6 +111,26 @@ cada parcela tem NID próprio, conferido nas 16 faturas parceladas do arquivo.
 mostravam uma coluna inteira de `R$ 0`, que tem cara de número apurado. Agora dizem
 que o relatório precisa ser importado, e que sincronizar não resolve.
 
+## Lote v1.8.1 → v1.10.0 · Leitura dos números
+
+Levantado em 2026-09-11, depois de a v1.8.0 entrar em produção e a tela mostrar
+valores absurdos.
+
+**18. O leitor de CSV corrompia valor e competência** (v1.8.1). O arquivo ia para o
+`XLSX` com inferência de tipo ligada, e o SheetJS adivinha com convenção americana —
+antes de `normalizeNumber` e `normalizeDate` verem qualquer coisa. `1.300,00` virava
+`1.3`, `900,00` virava `90000`, e `01/12/2024` virava 12 de janeiro. Atingia 45% das
+parcelas de recebimento e 93% das de pagamento, e inflava o recebimento de R$ 10,0 mi
+para R$ 18,6 mi. **A aba de Custo carregava o mesmo defeito desde a v1.1.0.** O CSV
+passa a ser lido como texto cru, com o BOM removido antes e detecção de ANSI.
+
+**19. Ordenação por clique no cabeçalho** (v1.9.0), nas duas áreas, com volta à ordem
+natural no terceiro clique.
+
+**20. Coluna de período por média** (v1.10.0), com seletor para voltar à soma. A
+média divide só pelos meses com valor: um cliente que entrou em julho não deve ter a
+média diluída pelos meses em que ainda não era cliente.
+
 ## Confirmado, sem ação
 
 **Horas apontadas não devem descontar as pausas.** Em 700 tarefas finalizadas, só 10

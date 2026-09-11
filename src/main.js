@@ -27,6 +27,9 @@ const state = {
   month: 'all',
   area: 'operacoes',
   sidebarCollapsed: window.innerWidth < COLLAPSE_BREAKPOINT,
+  // Média por padrão: o acumulado distorce a comparação quando os dois anos cobrem
+  // períodos de atividade diferentes, que é a regra num carteira que entra e sai.
+  periodMode: 'average',
   areaFilters: {},
   // Ordenação escolhida por clique no cabeçalho, por área. Vazio significa a ordem
   // natural da área — em Comercial, o ranking do ano corrente; em Operações, a
@@ -736,7 +739,7 @@ async function restoreState() {
 
 function persistShell() {
   try {
-    localStorage.setItem(SHELL_KEY, JSON.stringify({ area: state.area, sidebarCollapsed: state.sidebarCollapsed }));
+    localStorage.setItem(SHELL_KEY, JSON.stringify({ area: state.area, sidebarCollapsed: state.sidebarCollapsed, periodMode: state.periodMode }));
   } catch {
     // Preferência de navegação é conveniência local; o shell funciona sem ela.
   }
@@ -750,6 +753,7 @@ function restoreShell() {
     saved = null;
   }
   if (saved && typeof saved.sidebarCollapsed === 'boolean') state.sidebarCollapsed = saved.sidebarCollapsed;
+  if (saved && ['average', 'sum'].includes(saved.periodMode)) state.periodMode = saved.periodMode;
   state.area = areaByPath(window.location.pathname).id;
 }
 
@@ -763,6 +767,7 @@ function context() {
     tab: activeTabs[state.area],
     fieldsReady: state.sync.fieldsVersion >= DATA_FIELDS_VERSION,
     syncing: state.sync.running,
+    periodMode: state.periodMode,
     filters: state.areaFilters[state.area] || {}
   };
 }
@@ -837,9 +842,12 @@ function renderFilters(area, months) {
   const monthValue = months.includes(state.month) || state.month === 'all' ? state.month : 'all';
   state.month = monthValue;
 
+  const periodBlock = area.pending ? '' : `<div class="filter-block"><label for="period-mode">Coluna de período</label><select id="period-mode"><option value="average">Média mensal</option><option value="sum">Soma do período</option></select></div>`;
+
   container.innerHTML = `
     ${areaFilters.map((filter) => `<div class="filter-block"><label for="filter-${filter.id}">${filter.label}</label><select id="filter-${filter.id}" data-filter="${filter.id}"${filter.disabled ? ' disabled' : ''}>${filter.options.map((option) => `<option value="${option.value}">${option.label}</option>`).join('')}</select></div>`).join('')}
     <div class="filter-block"><label for="month">Competência</label><select id="month">${monthOptions}</select></div>
+    ${periodBlock}
   `;
 
   areaFilters.forEach((filter) => {
@@ -863,6 +871,16 @@ function renderFilters(area, months) {
     delete state.sort[area.id];
     render();
   });
+
+  const periodSelect = container.querySelector('#period-mode');
+  if (periodSelect) {
+    periodSelect.value = state.periodMode;
+    periodSelect.addEventListener('change', (event) => {
+      state.periodMode = event.target.value;
+      persistShell();
+      render();
+    });
+  }
 }
 
 function renderTabs(area) {
@@ -898,7 +916,7 @@ function renderIndicatorPanel(area, months) {
   const visible = state.month === 'all' ? months : months.filter((month) => month === state.month);
   $('#timeline-range').textContent = `${monthLabel(visible[0])} até ${monthLabel(visible[visible.length - 1])}`;
   table.className = 'indicator-table-wrap';
-  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader, state.sort[area.id]);
+  table.innerHTML = tableMarkup(area.rows(activeTabs[area.id], visible, context()), visible, area.labelHeader, { sort: state.sort[area.id], periodMode: state.periodMode });
 
   table.querySelectorAll('[data-sort-column]').forEach((header) => {
     const activate = () => toggleSort(area.id, header.dataset.sortColumn);

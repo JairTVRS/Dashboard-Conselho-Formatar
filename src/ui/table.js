@@ -35,14 +35,29 @@ export function comparisonPeriod(months) {
 }
 
 /**
- * Valor das colunas acumuladas. Uma linha pode declarar:
+ * Valor das colunas de período, nos dois modos de leitura.
+ *
+ * Em **média**, a regra é uma só para todas as linhas: a média dos meses **com
+ * valor**. Mês zerado fica fora do divisor porque não é um mês fraco, é um mês em
+ * que aquela linha não existia — o cliente que entrou em julho não deve ter a média
+ * diluída pelos seis meses em que ainda não era cliente. É por isso que a média é o
+ * padrão: o acumulado distorce a comparação quando os dois anos cobrem períodos de
+ * atividade diferentes.
+ *
+ * Em **soma**, cada linha declara como se agrega:
  * - `total(months)`: calcula sobre o conjunto inteiro (contagens de distintos);
  * - `aggregate: 'average'`: média dos meses (percentuais, médias e razões);
  * - nada: soma dos meses, que é o correto para contagens e valores aditivos.
  */
-export function accumulated(row, months, endMonth) {
+export function accumulated(row, months, endMonth, periodMode = 'sum') {
   const scoped = months.filter((month) => Number(month.split('-')[1]) <= endMonth);
   if (!scoped.length) return 0;
+
+  if (periodMode === 'average') {
+    const values = scoped.map((month) => row.value(month)).filter((value) => value !== 0);
+    return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+  }
+
   if (typeof row.total === 'function') return row.total(scoped);
   const values = scoped.map((month) => row.value(month));
   const sum = values.reduce((total, value) => total + value, 0);
@@ -96,16 +111,19 @@ function headCell(className, label, column, sort) {
  * comparação está oculta, as colunas de mês assumem a posição das que sumiram e
  * herdariam o cinza do acumulado e o laranja da variação.
  */
-export function tableMarkup(rows, visibleMonths, labelHeader = 'Indicador', sort = null) {
+export function tableMarkup(rows, visibleMonths, labelHeader = 'Indicador', { sort = null, periodMode = 'sum' } = {}) {
   const comparison = comparisonPeriod(visibleMonths);
-  const previousHead = comparison.comparable ? headCell('col-previous', comparison.previousLabel, 'previous', sort) : '';
+  // O rótulo diz o que a coluna contém, senão média e soma ficam indistinguíveis
+  // para quem chega na tela sem ter mexido no seletor.
+  const periodLabel = (label) => (periodMode === 'average' ? `média · ${label}` : label);
+  const previousHead = comparison.comparable ? headCell('col-previous', periodLabel(comparison.previousLabel), 'previous', sort) : '';
   const variationHead = comparison.comparable ? headCell('col-variation', 'Variação', 'variation', sort) : '';
   const monthHeads = visibleMonths.map((month) => headCell('col-month', monthLabel(month), month, sort)).join('');
-  const head = `<thead><tr>${headCell('col-label', labelHeader, 'label', sort)}${previousHead}${headCell('col-current', comparison.currentLabel, 'current', sort)}${variationHead}${monthHeads}</tr></thead>`;
+  const head = `<thead><tr>${headCell('col-label', labelHeader, 'label', sort)}${previousHead}${headCell('col-current', periodLabel(comparison.currentLabel), 'current', sort)}${variationHead}${monthHeads}</tr></thead>`;
 
   const entries = rows.map((row) => {
-    const current = accumulated(row, comparison.currentMonths, comparison.endMonth);
-    const previous = comparison.comparable ? accumulated(row, comparison.previousMonths, comparison.endMonth) : 0;
+    const current = accumulated(row, comparison.currentMonths, comparison.endMonth, periodMode);
+    const previous = comparison.comparable ? accumulated(row, comparison.previousMonths, comparison.endMonth, periodMode) : 0;
     return { row, current, previous, variation: comparison.comparable && previous ? (current / previous - 1) * 100 : null };
   });
 
